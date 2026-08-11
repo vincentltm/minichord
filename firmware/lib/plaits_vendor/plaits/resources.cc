@@ -31,10 +31,11 @@
 
 
 #include "plaits/resources.h"
+#include <Arduino.h>
 
 namespace plaits {
 
-const uint8_t syx_bank_0[] = {
+FLASHMEM const uint8_t syx_bank_0[] = {
       99,     58,     99,     60,
       99,      0,      0,      0,
        0,      0,      0,      0,
@@ -1060,7 +1061,7 @@ const uint8_t syx_bank_0[] = {
      117,    110,     99,    101,
       32,     52,     32,     32,
 };
-const uint8_t syx_bank_1[] = {
+FLASHMEM const uint8_t syx_bank_1[] = {
       95,     29,     20,     50,
       99,     95,      0,      0,
       41,      0,     19,      0,
@@ -2086,7 +2087,7 @@ const uint8_t syx_bank_1[] = {
       68,     82,     77,     45,
       83,     78,     65,     82,
 };
-const uint8_t syx_bank_2[] = {
+FLASHMEM const uint8_t syx_bank_2[] = {
       97,     99,     85,     68,
       99,     99,      0,      0,
       56,     20,      0,      2,
@@ -3120,7 +3121,7 @@ const uint8_t* const fm_patches_table[] = {
   syx_bank_2,
 };
 
-const float lut_sine[] = {
+FLASHMEM const float lut_sine[] = {
    0.000000000e+00,  1.227153829e-02,  2.454122852e-02,  3.680722294e-02,
    4.906767433e-02,  6.132073630e-02,  7.356456360e-02,  8.579731234e-02,
    9.801714033e-02,  1.102222073e-01,  1.224106752e-01,  1.345807085e-01,
@@ -3283,7 +3284,7 @@ const float lut_sine[] = {
    9.987954562e-01,  9.993223846e-01,  9.996988187e-01,  9.999247018e-01,
    1.000000000e+00,
 };
-const float lut_fm_frequency_quantizer[] = {
+FLASHMEM const float lut_fm_frequency_quantizer[] = {
   -1.200000000e+01, -1.200000000e+01, -1.200000000e+01, -1.184000000e+01,
   -1.184000000e+01, -1.184000000e+01, -1.111000000e+01, -1.038000000e+01,
   -9.650000000e+00, -8.920000000e+00, -8.190000000e+00, -7.460000000e+00,
@@ -3318,7 +3319,7 @@ const float lut_fm_frequency_quantizer[] = {
    3.525000000e+01,  3.600000000e+01,  3.600000000e+01,  3.600000000e+01,
    3.600000000e+01,  3.600000000e+01,
 };
-const float lut_fold[] = {
+FLASHMEM const float lut_fold[] = {
   -9.980545825e-01, -9.970653772e-01, -9.960649692e-01, -9.950532582e-01,
   -9.940301939e-01, -9.929957802e-01, -9.919500809e-01, -9.908932239e-01,
   -9.898254054e-01, -9.887468930e-01, -9.876580288e-01, -9.865592310e-01,
@@ -3449,7 +3450,7 @@ const float lut_fold[] = {
    9.940301939e-01,  9.950532582e-01,  9.960649692e-01,  9.970653772e-01,
    9.980545825e-01,  9.990327291e-01,  1.000000000e+00,  1.000000000e+00,
 };
-const float lut_fold_2[] = {
+FLASHMEM const float lut_fold_2[] = {
    1.000000000e+00,  9.992967758e-01,  9.985815484e-01,  9.978540078e-01,
    9.971138332e-01,  9.963606927e-01,  9.955942426e-01,  9.948141269e-01,
    9.940199768e-01,  9.932114103e-01,  9.923880310e-01,  9.915494283e-01,
@@ -3580,7 +3581,7 @@ const float lut_fold_2[] = {
   -9.971138332e-01, -9.978540078e-01, -9.985815484e-01, -9.992967758e-01,
   -1.000000000e+00, -1.000691521e+00, -1.001371627e+00, -1.001371627e+00,
 };
-const float lut_stiffness[] = {
+FLASHMEM const float lut_stiffness[] = {
   -6.250000000e-02, -5.859375000e-02, -5.468750000e-02, -5.078125000e-02,
   -4.687500000e-02, -4.296875000e-02, -3.906250000e-02, -3.515625000e-02,
   -3.125000000e-02, -2.734375000e-02, -2.343750000e-02, -1.953125000e-02,
@@ -3599,7 +3600,7 @@ const float lut_stiffness[] = {
    1.048005353e+00,  1.183990632e+00,  1.457101344e+00,  2.000000000e+00,
    2.000000000e+00,
 };
-const float lut_svf_shift[] = {
+FLASHMEM const float lut_svf_shift[] = {
    7.500000000e-01,  7.591880421e-01,  7.683455389e-01,  7.774424499e-01,
    7.864497239e-01,  7.953397451e-01,  8.040867240e-01,  8.126670211e-01,
    8.210593968e-01,  8.292451828e-01,  8.372083767e-01,  8.449356653e-01,
@@ -3666,7 +3667,7 @@ const float lut_svf_shift[] = {
    9.999998482e-01,  9.999998567e-01,  9.999998648e-01,  9.999998724e-01,
    9.999998795e-01,
 };
-const float lut_4x_downsampler_fir[] = {
+FLASHMEM const float lut_4x_downsampler_fir[] = {
    2.442415000e-02,  9.297315000e-02,  1.671293800e-01,  2.154733200e-01,
 };
 
@@ -3681,7 +3682,7 @@ const float* const lookup_table_table[] = {
   lut_4x_downsampler_fir,
 };
 
-const int16_t lut_ws_inverse_tan[] = {
+FLASHMEM const int16_t lut_ws_inverse_tan[] = {
   -32767, -26872, -24921, -23661,
   -22748, -22047, -21486, -21026,
   -20640, -20310, -20025, -19775,
@@ -3748,7 +3749,7 @@ const int16_t lut_ws_inverse_tan[] = {
    22748,  23661,  24921,  26872,
    32767,
 };
-const int16_t lut_ws_inverse_sin[] = {
+FLASHMEM const int16_t lut_ws_inverse_sin[] = {
   -32767, -30921, -30153, -29561,
   -29060, -28617, -28215, -27843,
   -27496, -27169, -26858, -26561,
@@ -3815,7 +3816,7 @@ const int16_t lut_ws_inverse_sin[] = {
    29060,  29561,  30153,  30921,
    32767,
 };
-const int16_t lut_ws_linear[] = {
+FLASHMEM const int16_t lut_ws_linear[] = {
   -32767, -32511, -32255, -31999,
   -31743, -31487, -31231, -30975,
   -30719, -30463, -30207, -29951,
@@ -3882,7 +3883,7 @@ const int16_t lut_ws_linear[] = {
    31743,  31999,  32255,  32511,
    32767,
 };
-const int16_t lut_ws_bump[] = {
+FLASHMEM const int16_t lut_ws_bump[] = {
        0,    -36,   -150,   -348,
     -636,  -1017,  -1496,  -2074,
    -2752,  -3528,  -4401,  -5366,
@@ -3949,7 +3950,7 @@ const int16_t lut_ws_bump[] = {
      636,    348,    150,     36,
        0,
 };
-const int16_t lut_ws_double_bump[] = {
+FLASHMEM const int16_t lut_ws_double_bump[] = {
    32767,  32745,  32678,  32567,
    32412,  32213,  31971,  31685,
    31356,  30985,  30571,  30117,
@@ -4032,7 +4033,7 @@ const int16_t* const lookup_table_i16_table[] = {
 const int32_t* const lookup_table_i32_table[] = {
 };
 
-const int8_t lut_lpc_excitation_pulse[] = {
+FLASHMEM const int8_t lut_lpc_excitation_pulse[] = {
        0,      0,      0,      0,
        1,      1,      1,      2,
        3,      3,      4,      5,
@@ -4200,7 +4201,7 @@ const int8_t* const lookup_table_i8_table[] = {
   lut_lpc_excitation_pulse,
 };
 
-const int16_t wav_integrated_waves[] = {
+FLASHMEM const int16_t wav_integrated_waves[] = {
   -20556, -20706, -20806, -20857,
   -20857, -20806, -20706, -20556,
   -20356, -20107, -19810, -19465,

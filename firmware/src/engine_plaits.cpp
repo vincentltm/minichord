@@ -60,11 +60,11 @@ EnginePlaits::EnginePlaits()
     memset(currentChord_, 0, sizeof(currentChord_));
 }
 
-DMAMEM static uint8_t plaitsBufferPool[4 * 16384];
+DMAMEM static uint8_t plaitsBufferPool[4 * 4096];
 
 void EnginePlaits::init() {
     for (size_t i = 0; i < MAX_PLAITS_VOICES; ++i) {
-        stmlib::BufferAllocator allocator(&plaitsBufferPool[i * 16384], 16384);
+        stmlib::BufferAllocator allocator(&plaitsBufferPool[i * 4096], 4096);
         voices_[i].Init(&allocator);
     }
     audioStream_.setActive(false);
@@ -261,9 +261,10 @@ void EnginePlaits::renderAudioBlock(audio_block_t* blockL, audio_block_t* blockR
             voiceStates_[v].active = false;
         }
 
-        // Accumulate audio into output block buffer
+        // Accumulate both main (out) and sub/aux (aux) audio signals into block buffer
         for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
-            int32_t outSample = static_cast<int32_t>(frames[i].out) * volume_;
+            float mixedFrame = (static_cast<float>(frames[i].out) + static_cast<float>(frames[i].aux)) * 0.5f;
+            int32_t outSample = static_cast<int32_t>(mixedFrame * volume_);
             blockL->data[i] = static_cast<int16_t>(stmlib::Clip16(blockL->data[i] + outSample));
             blockR->data[i] = static_cast<int16_t>(stmlib::Clip16(blockR->data[i] + outSample));
         }

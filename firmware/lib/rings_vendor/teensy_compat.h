@@ -6,9 +6,13 @@
 #include <cstring>
 #include <algorithm>
 
-// Teensy 4.0 uses FASTRUN for performance-critical code
+// Keep Rings DSP functions in Flash memory to preserve ITCM RAM
+#ifdef FASTRUN
+#undef FASTRUN
+#endif
+#define FASTRUN FLASHMEM
 #ifndef IN_RAM
-#define IN_RAM FASTRUN
+#define IN_RAM FLASHMEM
 #endif
 
 // ARM CMSIS saturation intrinsic (available on Cortex-M7)
