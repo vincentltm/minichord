@@ -162,11 +162,9 @@ void EnginePlaits::triggerVoice(uint8_t note, float velocity) {
 }
 
 void EnginePlaits::releaseVoice(uint8_t note) {
-    for (size_t i = 0; i < polyphony_; ++i) {
-        if (voiceStates_[i].active && voiceStates_[i].note == note) {
-            voiceStates_[i].level = 0.0f;
-        }
-    }
+    // In Plaits, releasing a touch pad allows the internal Low-Pass Gate (LPG)
+    // to complete its natural decay envelope (controlled by Knob 3 / patch_.decay).
+    // We do NOT zero out voiceStates_[i].level so the LPG tail decays naturally.
 }
 
 void EnginePlaits::onChordChange(uint8_t rootNote, const uint8_t chord[7], bool sharp, bool maj, bool min, bool sev) {
@@ -206,15 +204,15 @@ void EnginePlaits::onPotChange(uint8_t potIndex, float normalizedValue, bool shi
         }
     } else if (potIndex == 1) {
         if (!shifted) {
-            // Pot 1 Unshifted = Secondary Volume / Output Level
-            volume_ = normalizedValue;
+            volume_ = normalizedValue; // Pot 1 Unshifted = Secondary Level
         } else {
             timbre_ = normalizedValue; // Pot 1 Shifted = TIMBRE
             patch_.timbre = timbre_;
         }
     } else if (potIndex == 2) {
         if (!shifted) {
-            lpgDecay_ = normalizedValue; // Pot 2 Unshifted = LPG Decay time (Decay)
+            // Pot 2 Unshifted = LPG Decay (Decay time tail duration, 0.10f to 1.0f)
+            lpgDecay_ = 0.10f + 0.90f * normalizedValue;
             patch_.decay = lpgDecay_;
         } else {
             morph_ = normalizedValue; // Pot 2 Shifted = MORPH
@@ -255,8 +253,13 @@ void EnginePlaits::renderAudioBlock(audio_block_t* blockL, audio_block_t* blockR
         // Render Plaits voice frame block
         voices_[v].Render(vPatch, vMod, frames, AUDIO_BLOCK_SAMPLES);
 
-        // Reset trigger pulse after render
+        // Reset trigger pulse after initial frame render so trigger acts as an impulse strike
         voiceStates_[v].triggerPulse = 0.0f;
+
+        // Auto-deactivate voice after extended idle age to keep voice pool clean
+        if (voiceStates_[v].age > 1500) {
+            voiceStates_[v].active = false;
+        }
 
         // Accumulate audio into output block buffer
         for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
