@@ -1298,12 +1298,11 @@ void handle_hold_button() {
 void handle_preset_change() {
   // Unified 16-slot cycling:
   // Banks 0-11: Stock subtractive presets (a-l)
-  // Bank 12: Modal resonator
-  // Bank 13: Sympathetic strings
-  // Bank 14: Inharmonic string
-  // Bank 15: FM voice
-  static const int TOTAL_BANKS = 16;
+  // Banks 12-15: Rings modes (Modal, Sympathetic, Inharmonic, FM)
+  // Banks 16-31: Plaits sound models (VA, Waveshape, FM, Grain, Additive, Wavetable, Chord, Speech, Swarm, Noise, Particle, String, Modal, Kick, Snare, HiHat)
+  static const int TOTAL_BANKS = 32;
   static const int RINGS_START = 12;
+  static const int PLAITS_START = 16;
   static const rings::ResonatorModel rings_models[] = {
     rings::RESONATOR_MODEL_MODAL,
     rings::RESONATOR_MODEL_SYMPATHETIC_STRING,
@@ -1328,23 +1327,27 @@ void handle_preset_change() {
   }
 
   if (current_bank_number != prev_bank) {
-    bool was_rings = prev_bank >= RINGS_START;
-    bool is_rings = current_bank_number >= RINGS_START;
-
-    if (is_rings) {
-      // Entering or staying in Rings mode
+    if (current_bank_number >= PLAITS_START) {
+      // Plaits engine mode (Banks 16-31)
+      int plaits_idx = current_bank_number - PLAITS_START;
+      modeManager.setModeIndex(5 + plaits_idx);  // Modes 5-20 are Plaits
+      Serial.print("> Mode: ");
+      Serial.println(modeManager.currentModeName());
+      // Distinct LED color hue gradient for Plaits models (Cyan to Blue, 170-250)
+      float hue = 170.0f + (plaits_idx * 5.0f);
+      set_led_color(hue, 1.0f, 1.0f - led_attenuation);
+    } else if (current_bank_number >= RINGS_START) {
+      // Rings engine mode (Banks 12-15)
       int rings_idx = current_bank_number - RINGS_START;
-      // Set target Rings resonator model before activating audio stream
       ringsEngine->setModel(rings_models[rings_idx]);
-      modeManager.setModeIndex(1 + rings_idx);  // modes 1-4 are rings
+      modeManager.setModeIndex(1 + rings_idx);  // Modes 1-4 are Rings
       Serial.print("> Mode: ");
       Serial.println(rings_names[rings_idx]);
       float hue = ringsEngine->ledHue();
-      set_led_color(hue, 1.0, 1.0 - led_attenuation);
+      set_led_color(hue, 1.0f, 1.0f - led_attenuation);
     } else {
-      // Stock preset
-      if (was_rings) {
-        // Transition rings → stock: unmute stock, mute rings
+      // Stock preset (Banks 0-11)
+      if (prev_bank >= RINGS_START) {
         modeManager.setModeIndex(0);
         Serial.println("> Mode: Stock");
       }
