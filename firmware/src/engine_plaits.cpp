@@ -81,10 +81,58 @@ void EnginePlaits::deactivate() {
     }
 }
 
+struct PlaitsModelDefaults {
+    float harmonics;
+    float timbre;
+    float morph;
+    float decay;
+    float lpgColour;
+};
+
+static const PlaitsModelDefaults kPlaitsDefaults[] = {
+    { 0.50f, 0.65f, 0.40f, 0.60f, 0.50f }, // 0: VA
+    { 0.35f, 0.55f, 0.45f, 0.55f, 0.50f }, // 1: Waveshaper
+    { 0.40f, 0.45f, 0.60f, 0.70f, 0.40f }, // 2: 2-Op FM
+    { 0.50f, 0.70f, 0.50f, 0.65f, 0.50f }, // 3: Grain / Formant
+    { 0.60f, 0.50f, 0.50f, 0.75f, 0.60f }, // 4: Additive Harmonic
+    { 0.45f, 0.60f, 0.70f, 0.80f, 0.50f }, // 5: Wavetable
+    { 0.50f, 0.50f, 0.60f, 0.70f, 0.50f }, // 6: Chord Engine
+    { 0.50f, 0.60f, 0.50f, 0.65f, 0.50f }, // 7: Speech
+    { 0.40f, 0.65f, 0.55f, 0.75f, 0.50f }, // 8: Swarm
+    { 0.50f, 0.50f, 0.50f, 0.40f, 0.50f }, // 9: Noise
+    { 0.40f, 0.60f, 0.50f, 0.50f, 0.50f }, // 10: Particle
+    { 0.50f, 0.50f, 0.50f, 0.60f, 0.50f }, // 11: String
+    { 0.45f, 0.70f, 0.60f, 0.65f, 0.50f }, // 12: Modal
+    { 0.30f, 0.40f, 0.50f, 0.45f, 0.50f }, // 13: Kick
+    { 0.50f, 0.50f, 0.50f, 0.35f, 0.50f }, // 14: Snare
+    { 0.60f, 0.70f, 0.50f, 0.25f, 0.60f }, // 15: HiHat
+    { 0.50f, 0.60f, 0.50f, 0.60f, 0.50f }, // 16: VA VCF
+    { 0.50f, 0.50f, 0.50f, 0.60f, 0.50f }, // 17: Phase Distortion
+    { 0.40f, 0.50f, 0.50f, 0.70f, 0.50f }, // 18: Six-Op FM
+    { 0.50f, 0.60f, 0.50f, 0.70f, 0.50f }, // 19: Wave Terrain
+    { 0.50f, 0.50f, 0.50f, 0.75f, 0.50f }, // 20: String Machine
+    { 0.50f, 0.50f, 0.50f, 0.50f, 0.50f }  // 21: Chiptune
+};
+
 void EnginePlaits::setSubModel(int32_t subModel) {
     if (subModel >= 0 && subModel < PLAITS_MODEL_COUNT) {
         currentModel_ = subModel;
         patch_.engine = currentModel_;
+
+        // Load tuned preset defaults for the selected model
+        if (subModel < static_cast<int32_t>(sizeof(kPlaitsDefaults) / sizeof(kPlaitsDefaults[0]))) {
+            harmonics_ = kPlaitsDefaults[subModel].harmonics;
+            timbre_ = kPlaitsDefaults[subModel].timbre;
+            morph_ = kPlaitsDefaults[subModel].morph;
+            lpgDecay_ = kPlaitsDefaults[subModel].decay;
+            lpgColour_ = kPlaitsDefaults[subModel].lpgColour;
+
+            patch_.harmonics = harmonics_;
+            patch_.timbre = timbre_;
+            patch_.morph = morph_;
+            patch_.decay = lpgDecay_;
+            patch_.lpg_colour = lpgColour_;
+        }
     }
 }
 
@@ -147,19 +195,31 @@ void EnginePlaits::onHarpTouch(uint8_t padIndex, bool pressed, uint8_t noteValue
 }
 
 void EnginePlaits::onPotChange(uint8_t potIndex, float normalizedValue, bool shifted, bool holdPressed) {
-    switch (potIndex) {
-        case 0:
-            harmonics_ = normalizedValue;
+    if (holdPressed) return;
+
+    if (potIndex == 0) {
+        if (!shifted) {
+            volume_ = normalizedValue; // Pot 0 Unshifted = Main / Engine Volume
+        } else {
+            harmonics_ = normalizedValue; // Pot 0 Shifted = HARMONICS
             patch_.harmonics = harmonics_;
-            break;
-        case 1:
-            timbre_ = normalizedValue;
+        }
+    } else if (potIndex == 1) {
+        if (!shifted) {
+            // Pot 1 Unshifted = Secondary Volume / Output Level
+            volume_ = normalizedValue;
+        } else {
+            timbre_ = normalizedValue; // Pot 1 Shifted = TIMBRE
             patch_.timbre = timbre_;
-            break;
-        case 2:
-            morph_ = normalizedValue;
+        }
+    } else if (potIndex == 2) {
+        if (!shifted) {
+            lpgDecay_ = normalizedValue; // Pot 2 Unshifted = LPG Decay time (Decay)
+            patch_.decay = lpgDecay_;
+        } else {
+            morph_ = normalizedValue; // Pot 2 Shifted = MORPH
             patch_.morph = morph_;
-            break;
+        }
     }
 }
 
