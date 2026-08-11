@@ -60,11 +60,11 @@ EnginePlaits::EnginePlaits()
     memset(currentChord_, 0, sizeof(currentChord_));
 }
 
-DMAMEM static uint8_t plaitsBufferPool[4 * 4096];
+DMAMEM static uint8_t plaitsBufferPool[4 * 1024];
 
 void EnginePlaits::init() {
     for (size_t i = 0; i < MAX_PLAITS_VOICES; ++i) {
-        stmlib::BufferAllocator allocator(&plaitsBufferPool[i * 4096], 4096);
+        stmlib::BufferAllocator allocator(&plaitsBufferPool[i * 1024], 1024);
         voices_[i].Init(&allocator);
     }
     audioStream_.setActive(false);

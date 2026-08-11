@@ -24,7 +24,8 @@ int version_ID=8; //to be read 00.03, stored at adress 7 in memory
 #include <new>
 EngineManager modeManager;
 EngineStock stockEngine;
-DMAMEM static uint8_t shared_engine_memory[sizeof(EngineRings) > sizeof(EnginePlaits) ? sizeof(EngineRings) : sizeof(EnginePlaits)] __attribute__((aligned(4)));
+DMAMEM static uint8_t ringsMemory[sizeof(EngineRings)] __attribute__((aligned(4)));
+DMAMEM static uint8_t plaitsMemory[sizeof(EnginePlaits)] __attribute__((aligned(4)));
 EngineRings* ringsEngine = nullptr;
 EnginePlaits* plaitsEngine = nullptr;
 static const int RINGS_START = 12;
@@ -958,15 +959,12 @@ void setup() {
       stereo_r_mixer.gain(3, 1.0f);
     }
   );
-  ringsEngine = new (shared_engine_memory) EngineRings();
+  ringsEngine = new (ringsMemory) EngineRings();
   ringsEngine->init();
   patchCordRingsL = new AudioConnection(ringsEngine->getStream(), 0, stereo_l_mixer, 3);
   patchCordRingsR = new AudioConnection(ringsEngine->getStream(), 1, stereo_r_mixer, 3);
 
-  // Note: plaitsEngine shares shared_engine_memory in DMAMEM.
-  // Placement new constructs EnginePlaits dynamically when switching into Plaits modes.
-  plaitsEngine = reinterpret_cast<EnginePlaits*>(shared_engine_memory);
-  new (shared_engine_memory) EnginePlaits();
+  plaitsEngine = new (plaitsMemory) EnginePlaits();
   plaitsEngine->init();
   new AudioConnection(*plaitsEngine->getStream(), 0, stereo_l_mixer, 2);
   new AudioConnection(*plaitsEngine->getStream(), 1, stereo_r_mixer, 2);
@@ -1354,29 +1352,14 @@ void handle_preset_change() {
   }
 
   if (current_bank_number != prev_bank) {
-    bool was_plaits = prev_bank >= PLAITS_START;
-    bool is_plaits = current_bank_number >= PLAITS_START;
-    bool was_rings = (prev_bank >= RINGS_START && prev_bank < PLAITS_START);
-    bool is_rings = (current_bank_number >= RINGS_START && current_bank_number < PLAITS_START);
-
-    if (is_plaits) {
-      if (!was_plaits) {
-        // Transitioning into Plaits mode: construct EnginePlaits in shared memory
-        plaitsEngine = new (shared_engine_memory) EnginePlaits();
-        plaitsEngine->init();
-      }
+    if (current_bank_number >= PLAITS_START) {
       int plaits_idx = current_bank_number - PLAITS_START;
       modeManager.setModeIndex(5 + plaits_idx);  // Modes 5-20 are Plaits
       Serial.print("> Mode: ");
       Serial.println(modeManager.currentModeName());
       float hue = plaitsEngine->ledHue();
       set_led_color(hue, 1.0f, 1.0f - led_attenuation);
-    } else if (is_rings) {
-      if (!was_rings) {
-        // Transitioning into Rings mode: construct EngineRings in shared memory
-        ringsEngine = new (shared_engine_memory) EngineRings();
-        ringsEngine->init();
-      }
+    } else if (current_bank_number >= RINGS_START) {
       int rings_idx = current_bank_number - RINGS_START;
       ringsEngine->setModel(rings_models[rings_idx]);
       modeManager.setModeIndex(1 + rings_idx);  // Modes 1-4 are Rings
@@ -1386,7 +1369,7 @@ void handle_preset_change() {
       set_led_color(hue, 1.0f, 1.0f - led_attenuation);
     } else {
       // Stock preset (Banks 0-11)
-      if (was_rings || was_plaits) {
+      if (prev_bank >= RINGS_START) {
         modeManager.setModeIndex(0);
         Serial.println("> Mode: Stock");
       }
