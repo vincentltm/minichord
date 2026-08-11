@@ -1386,21 +1386,24 @@ void handle_low_battery() {
     led_blinking_flag = true;
   } else if (LBO_transition == 2) {
     led_blinking_flag = false;
-    float hue = (current_bank_number >= PLAITS_START) ? plaitsEngine->ledHue() : bank_led_hue;
-    set_led_color(hue, 1.0, 1 - led_attenuation);
+    float hue = (modeManager.currentModeIndex() > 0) ? modeManager.activeEngine()->ledHue() : bank_led_hue;
+    set_led_color(hue, 1.0f, 1.0f - led_attenuation);
   }
   if (led_blinking_flag) {
-    set_led_color(bank_led_hue, 1.0, 0.6 + 0.4 * sin(color_led_blink_val));
-    color_led_blink_val += 0.005;
-  } else if (current_bank_number >= PLAITS_START) {
-    // Gentle breathing pulse animation for Plaits mode (0.65 to 1.0 brightness)
+    set_led_color(bank_led_hue, 1.0f, 0.6f + 0.4f * sinf(color_led_blink_val));
+    color_led_blink_val += 0.005f;
+  } else if (modeManager.currentModeIndex() >= 5) {
+    // Gentle breathing pulse animation for Plaits mode (0.75 to 1.0 brightness)
     static float plaits_led_phase = 0.0f;
     plaits_led_phase += 0.003f;
     if (plaits_led_phase >= 6.28318f) plaits_led_phase -= 6.28318f;
     
-    float pulse = 0.80f + 0.20f * sinf(plaits_led_phase);
-    float hue = plaitsEngine->ledHue();
+    float pulse = 0.75f + 0.25f * sinf(plaits_led_phase);
+    float hue = modeManager.activeEngine()->ledHue();
     set_led_color(hue, 1.0f, (1.0f - led_attenuation) * pulse);
+  } else if (modeManager.currentModeIndex() > 0) {
+    float hue = modeManager.activeEngine()->ledHue();
+    set_led_color(hue, 1.0f, 1.0f - led_attenuation);
   }
 }
 
@@ -1441,6 +1444,7 @@ void loop() {
   down_button.set(digitalRead(DOWN_PGM_PIN));
   LBO_flag.set(digitalRead(BATT_LBO_PIN));
   chord_matrix.update(chord_matrix_array);
+  shift_held = chord_matrix_array[0].read_value();
 
   // Handle low battery indicator
   handle_low_battery();
