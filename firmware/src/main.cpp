@@ -24,10 +24,10 @@ int version_ID=8; //to be read 00.03, stored at adress 7 in memory
 #include <new>
 EngineManager modeManager;
 EngineStock stockEngine;
-DMAMEM static uint8_t ringsMemory[sizeof(EngineRings)] __attribute__((aligned(4)));
-DMAMEM static uint8_t plaitsMemory[sizeof(EnginePlaits)] __attribute__((aligned(4)));
-EngineRings* ringsEngine = nullptr;
-EnginePlaits* plaitsEngine = nullptr;
+DMAMEM static EngineRings ringsEngineObj;
+DMAMEM static EnginePlaits plaitsEngineObj;
+EngineRings* ringsEngine = &ringsEngineObj;
+EnginePlaits* plaitsEngine = &plaitsEngineObj;
 static const int RINGS_START = 12;
 static const int PLAITS_START = 16;
 AudioConnection* patchCordRingsL = nullptr;
@@ -959,12 +959,10 @@ void setup() {
       stereo_r_mixer.gain(3, 1.0f);
     }
   );
-  ringsEngine = new (ringsMemory) EngineRings();
   ringsEngine->init();
   patchCordRingsL = new AudioConnection(ringsEngine->getStream(), 0, stereo_l_mixer, 3);
   patchCordRingsR = new AudioConnection(ringsEngine->getStream(), 1, stereo_r_mixer, 3);
 
-  plaitsEngine = new (plaitsMemory) EnginePlaits();
   plaitsEngine->init();
   new AudioConnection(*plaitsEngine->getStream(), 0, stereo_l_mixer, 2);
   new AudioConnection(*plaitsEngine->getStream(), 1, stereo_r_mixer, 2);
