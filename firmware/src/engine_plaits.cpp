@@ -233,7 +233,7 @@ void EnginePlaits::renderAudioBlock(audio_block_t* blockL, audio_block_t* blockR
     memset(blockL->data, 0, sizeof(blockL->data));
     memset(blockR->data, 0, sizeof(blockR->data));
 
-    plaits::Voice::Frame frames[AUDIO_BLOCK_SAMPLES];
+    DMAMEM static plaits::Voice::Frame frames[AUDIO_BLOCK_SAMPLES];
 
     for (size_t v = 0; v < polyphony_; ++v) {
         if (!voiceStates_[v].active) continue;

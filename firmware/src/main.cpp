@@ -1372,11 +1372,10 @@ void handle_preset_change() {
       set_led_color(hue, 1.0f, 1.0f - led_attenuation);
     } else {
       // Stock preset (Banks 0-11)
-      if (prev_bank >= RINGS_START) {
-        modeManager.setModeIndex(0);
-        Serial.println("> Mode: Stock");
-      }
+      modeManager.setModeIndex(0);
       load_config(current_bank_number);
+      Serial.print("> Mode: Stock Bank ");
+      Serial.println(current_bank_number);
     }
   }
 }
