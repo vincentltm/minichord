@@ -743,7 +743,10 @@ void apply_audio_parameter(int adress, int value) {
       case 261:
       case 262:
       case 263:
-        if (ringsEngine) ringsEngine->applyParameter(adress, value);
+      case 264:
+      case 265:
+      case 266:
+        if (modeManager.activeEngine()) modeManager.activeEngine()->applyParameter(adress, value);
         break;
   }
 }

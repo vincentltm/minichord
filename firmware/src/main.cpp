@@ -14,6 +14,7 @@
 #include "engine_manager.h"
 #include "engine_stock.h"
 #include "engine_rings.h"
+#include "engine_plaits.h"
 #include "generative_sequencer.h"
 #include "master_effects.h"
 
@@ -23,8 +24,9 @@ int version_ID=8; //to be read 00.03, stored at adress 7 in memory
 #include <new>
 EngineManager modeManager;
 EngineStock stockEngine;
-DMAMEM static uint8_t rings_engine_memory[sizeof(EngineRings)] __attribute__((aligned(4)));
+DMAMEM static uint8_t shared_engine_memory[sizeof(EngineRings) > sizeof(EnginePlaits) ? sizeof(EngineRings) : sizeof(EnginePlaits)] __attribute__((aligned(4)));
 EngineRings* ringsEngine = nullptr;
+EnginePlaits* plaitsEngine = nullptr;
 AudioConnection* patchCordRingsL = nullptr;
 AudioConnection* patchCordRingsR = nullptr;
 bool shift_held = false;
@@ -954,16 +956,38 @@ void setup() {
       stereo_r_mixer.gain(3, 1.0f);
     }
   );
-  ringsEngine = new (rings_engine_memory) EngineRings();
+  ringsEngine = new (shared_engine_memory) EngineRings();
   ringsEngine->init();
   patchCordRingsL = new AudioConnection(ringsEngine->getStream(), 0, stereo_l_mixer, 3);
   patchCordRingsR = new AudioConnection(ringsEngine->getStream(), 1, stereo_r_mixer, 3);
+
+  plaitsEngine = reinterpret_cast<EnginePlaits*>(shared_engine_memory);
+  plaitsEngine->init();
+  new AudioConnection(*plaitsEngine->getStream(), 0, stereo_l_mixer, 2);
+  new AudioConnection(*plaitsEngine->getStream(), 1, stereo_r_mixer, 2);
 
   modeManager.registerMode("Stock", &stockEngine, -1);
   modeManager.registerMode("Modal", ringsEngine, rings::RESONATOR_MODEL_MODAL);
   modeManager.registerMode("Sympathetic", ringsEngine, rings::RESONATOR_MODEL_SYMPATHETIC_STRING);
   modeManager.registerMode("Inharmonic", ringsEngine, rings::RESONATOR_MODEL_STRING);
   modeManager.registerMode("FM", ringsEngine, rings::RESONATOR_MODEL_FM_VOICE);
+
+  modeManager.registerMode("Plaits: VA", plaitsEngine, PLAITS_MODEL_VIRTUAL_ANALOG);
+  modeManager.registerMode("Plaits: Waveshape", plaitsEngine, PLAITS_MODEL_WAVESHAPING);
+  modeManager.registerMode("Plaits: FM", plaitsEngine, PLAITS_MODEL_FM);
+  modeManager.registerMode("Plaits: Grain", plaitsEngine, PLAITS_MODEL_GRAIN);
+  modeManager.registerMode("Plaits: Additive", plaitsEngine, PLAITS_MODEL_ADDITIVE);
+  modeManager.registerMode("Plaits: Wavetable", plaitsEngine, PLAITS_MODEL_WAVETABLE);
+  modeManager.registerMode("Plaits: Chord", plaitsEngine, PLAITS_MODEL_CHORD);
+  modeManager.registerMode("Plaits: Speech", plaitsEngine, PLAITS_MODEL_SPEECH);
+  modeManager.registerMode("Plaits: Swarm", plaitsEngine, PLAITS_MODEL_SWARM);
+  modeManager.registerMode("Plaits: Noise", plaitsEngine, PLAITS_MODEL_NOISE);
+  modeManager.registerMode("Plaits: Particle", plaitsEngine, PLAITS_MODEL_PARTICLE);
+  modeManager.registerMode("Plaits: String", plaitsEngine, PLAITS_MODEL_STRING);
+  modeManager.registerMode("Plaits: Modal", plaitsEngine, PLAITS_MODEL_MODAL);
+  modeManager.registerMode("Plaits: Kick", plaitsEngine, PLAITS_MODEL_BASS_DRUM);
+  modeManager.registerMode("Plaits: Snare", plaitsEngine, PLAITS_MODEL_SNARE_DRUM);
+  modeManager.registerMode("Plaits: HiHat", plaitsEngine, PLAITS_MODEL_HI_HAT);
 
   // Explicitly activate Stock mode at boot — ensures Rings mixer channel is muted
   // and prevents the boot plonk from Rings resonators initializing while audible.

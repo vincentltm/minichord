@@ -13,7 +13,7 @@ struct ModeEntry {
 // Modes cycle: Stock -> Modal -> Sympathetic -> Inharmonic -> FM
 class EngineManager {
 public:
-    static const uint8_t MAX_MODES = 8;
+    static const uint8_t MAX_MODES = 32;
     
     EngineManager() : modeCount_(0), currentMode_(0) {}
     

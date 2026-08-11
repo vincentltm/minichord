@@ -1,0 +1,261 @@
+#include "engine_plaits.h"
+#include <cstring>
+#include <algorithm>
+
+void AudioStreamPlaits::update() {
+    audio_block_t *blockL = allocate();
+    audio_block_t *blockR = allocate();
+    
+    if (!blockL || !blockR) {
+        if (blockL) release(blockL);
+        if (blockR) release(blockR);
+        return;
+    }
+    
+    if (active_ && engine_) {
+        engine_->renderAudioBlock(blockL, blockR);
+    } else {
+        memset(blockL->data, 0, sizeof(blockL->data));
+        memset(blockR->data, 0, sizeof(blockR->data));
+    }
+    
+    transmit(blockL, 0);
+    transmit(blockR, 1);
+    release(blockL);
+    release(blockR);
+}
+
+EnginePlaits::EnginePlaits() 
+    : audioStream_(this),
+      currentModel_(0),
+      harmonics_(0.5f),
+      timbre_(0.5f),
+      morph_(0.5f),
+      lpgDecay_(0.5f),
+      lpgColour_(0.5f),
+      volume_(0.8f),
+      polyphony_(6),
+      currentRootNote_(60),
+      chordActive_(false) {
+    
+    memset(&patch_, 0, sizeof(patch_));
+    patch_.note = 60.0f;
+    patch_.harmonics = harmonics_;
+    patch_.timbre = timbre_;
+    patch_.morph = morph_;
+    patch_.engine = currentModel_;
+    patch_.decay = lpgDecay_;
+    patch_.lpg_colour = lpgColour_;
+
+    for (size_t i = 0; i < MAX_PLAITS_VOICES; ++i) {
+        voiceStates_[i].active = false;
+        voiceStates_[i].note = 60;
+        voiceStates_[i].level = 0.0f;
+        voiceStates_[i].triggerPulse = 0.0f;
+        voiceStates_[i].age = 0;
+        
+        memset(&modulations_[i], 0, sizeof(modulations_[i]));
+    }
+    
+    memset(currentChord_, 0, sizeof(currentChord_));
+}
+
+DMAMEM static uint8_t plaitsBufferPool[4 * 16384];
+
+void EnginePlaits::init() {
+    for (size_t i = 0; i < MAX_PLAITS_VOICES; ++i) {
+        stmlib::BufferAllocator allocator(&plaitsBufferPool[i * 16384], 16384);
+        voices_[i].Init(&allocator);
+    }
+    audioStream_.setActive(false);
+}
+
+void EnginePlaits::activate() {
+    audioStream_.setActive(true);
+}
+
+void EnginePlaits::deactivate() {
+    audioStream_.setActive(false);
+    for (size_t i = 0; i < MAX_PLAITS_VOICES; ++i) {
+        voiceStates_[i].active = false;
+    }
+}
+
+void EnginePlaits::setSubModel(int32_t subModel) {
+    if (subModel >= 0 && subModel < PLAITS_MODEL_COUNT) {
+        currentModel_ = subModel;
+        patch_.engine = currentModel_;
+    }
+}
+
+void EnginePlaits::triggerVoice(uint8_t note, float velocity) {
+    // Find free voice or steal oldest
+    int targetIdx = -1;
+    uint32_t oldestAge = 0;
+
+    for (size_t i = 0; i < polyphony_; ++i) {
+        if (!voiceStates_[i].active) {
+            targetIdx = i;
+            break;
+        }
+        if (voiceStates_[i].age >= oldestAge) {
+            oldestAge = voiceStates_[i].age;
+            targetIdx = i;
+        }
+    }
+
+    if (targetIdx >= 0) {
+        voiceStates_[targetIdx].active = true;
+        voiceStates_[targetIdx].note = note;
+        voiceStates_[targetIdx].level = velocity;
+        voiceStates_[targetIdx].triggerPulse = 1.0f;
+        voiceStates_[targetIdx].age = 0;
+    }
+}
+
+void EnginePlaits::releaseVoice(uint8_t note) {
+    for (size_t i = 0; i < polyphony_; ++i) {
+        if (voiceStates_[i].active && voiceStates_[i].note == note) {
+            voiceStates_[i].level = 0.0f;
+        }
+    }
+}
+
+void EnginePlaits::onChordChange(uint8_t rootNote, const uint8_t chord[7], bool sharp, bool maj, bool min, bool sev) {
+    currentRootNote_ = rootNote;
+    memcpy(currentChord_, chord, sizeof(currentChord_));
+    chordActive_ = true;
+    
+    // Auto-strum chord on chord button change
+    for (int i = 0; i < 3; ++i) {
+        if (currentChord_[i] > 0) {
+            triggerVoice(currentChord_[i], 0.7f);
+        }
+    }
+}
+
+void EnginePlaits::onChordRelease() {
+    chordActive_ = false;
+}
+
+void EnginePlaits::onHarpTouch(uint8_t padIndex, bool pressed, uint8_t noteValue, float pressure) {
+    if (pressed) {
+        triggerVoice(noteValue, pressure);
+    } else {
+        releaseVoice(noteValue);
+    }
+}
+
+void EnginePlaits::onPotChange(uint8_t potIndex, float normalizedValue, bool shifted, bool holdPressed) {
+    switch (potIndex) {
+        case 0:
+            harmonics_ = normalizedValue;
+            patch_.harmonics = harmonics_;
+            break;
+        case 1:
+            timbre_ = normalizedValue;
+            patch_.timbre = timbre_;
+            break;
+        case 2:
+            morph_ = normalizedValue;
+            patch_.morph = morph_;
+            break;
+    }
+}
+
+void EnginePlaits::onSequencerNote(uint8_t voiceIndex, uint8_t noteValue, float accent) {
+    triggerVoice(noteValue, accent);
+}
+
+void EnginePlaits::onHoldToggle(bool continuous) {
+    // Hold toggle handler
+}
+
+void EnginePlaits::renderAudioBlock(audio_block_t* blockL, audio_block_t* blockR) {
+    memset(blockL->data, 0, sizeof(blockL->data));
+    memset(blockR->data, 0, sizeof(blockR->data));
+
+    plaits::Voice::Frame frames[AUDIO_BLOCK_SAMPLES];
+
+    for (size_t v = 0; v < polyphony_; ++v) {
+        if (!voiceStates_[v].active) continue;
+
+        voiceStates_[v].age++;
+
+        plaits::Patch vPatch = patch_;
+        vPatch.note = static_cast<float>(voiceStates_[v].note);
+        vPatch.engine = currentModel_;
+
+        plaits::Modulations vMod = modulations_[v];
+        vMod.trigger = voiceStates_[v].triggerPulse;
+        vMod.level = voiceStates_[v].level;
+        vMod.trigger_patched = true;
+        vMod.level_patched = true;
+
+        // Render Plaits voice frame block
+        voices_[v].Render(vPatch, vMod, frames, AUDIO_BLOCK_SAMPLES);
+
+        // Reset trigger pulse after render
+        voiceStates_[v].triggerPulse = 0.0f;
+
+        // Accumulate audio into output block buffer
+        for (size_t i = 0; i < AUDIO_BLOCK_SAMPLES; ++i) {
+            int32_t outSample = static_cast<int32_t>(frames[i].out) * volume_;
+            blockL->data[i] = static_cast<int16_t>(stmlib::Clip16(blockL->data[i] + outSample));
+            blockR->data[i] = static_cast<int16_t>(stmlib::Clip16(blockR->data[i] + outSample));
+        }
+    }
+}
+
+void EnginePlaits::sendMidi() {
+    // MIDI output handling
+}
+
+void EnginePlaits::applyParameter(uint16_t address, int16_t value) {
+    switch (address) {
+        case 260: // Plaits Engine Model (0-21)
+            setSubModel(value);
+            break;
+        case 261: // Harmonics (0-1000)
+            harmonics_ = constrain(value / 1000.0f, 0.0f, 1.0f);
+            patch_.harmonics = harmonics_;
+            break;
+        case 262: // Timbre (0-1000)
+            timbre_ = constrain(value / 1000.0f, 0.0f, 1.0f);
+            patch_.timbre = timbre_;
+            break;
+        case 263: // Morph (0-1000)
+            morph_ = constrain(value / 1000.0f, 0.0f, 1.0f);
+            patch_.morph = morph_;
+            break;
+        case 264: // LPG Decay (0-1000)
+            lpgDecay_ = constrain(value / 1000.0f, 0.0f, 1.0f);
+            patch_.decay = lpgDecay_;
+            break;
+        case 265: // LPG Colour (0-1000)
+            lpgColour_ = constrain(value / 1000.0f, 0.0f, 1.0f);
+            patch_.lpg_colour = lpgColour_;
+            break;
+        case 266: // Polyphony (1-6)
+            polyphony_ = constrain(value, 1, MAX_PLAITS_VOICES);
+            break;
+    }
+}
+
+void EnginePlaits::getParameterDefaults(int16_t* dest, size_t size) {
+    if (size > 266) {
+        dest[260] = currentModel_;
+        dest[261] = static_cast<int16_t>(harmonics_ * 1000.0f);
+        dest[262] = static_cast<int16_t>(timbre_ * 1000.0f);
+        dest[263] = static_cast<int16_t>(morph_ * 1000.0f);
+        dest[264] = static_cast<int16_t>(lpgDecay_ * 1000.0f);
+        dest[265] = static_cast<int16_t>(lpgColour_ * 1000.0f);
+        dest[266] = polyphony_;
+    }
+}
+
+const char* EnginePlaits::presetFilename(uint8_t bankIndex) {
+    static char fn[32];
+    snprintf(fn, sizeof(fn), "plaits_bank_%d.dat", bankIndex);
+    return fn;
+}

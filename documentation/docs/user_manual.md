@@ -406,39 +406,35 @@ If you carefully followed those steps, the Teensy Loader will indicate "Download
 After an update, it might be necessary to use [minicontrol](/minicontrol) to wipe all presets back for factory using the "reset all banks" option, as changes might render previous presets incompatible (or at least weird-sounding). 
 
 
-# **Resonator Engine & Advanced Features (`resonator` branch)**
+# **Plaits Multi-Model Synth Engine (`plaits` branch)**
 
-The `resonator` firmware introduces physical modeling sound synthesis based on Mutable Instruments **Rings**, as well as lo-fi analog-style delay, overdrive saturation, and generative arpeggiation.
+The `plaits` firmware integrates Mutable Instruments **Plaits**, expanding Minichord with 16 distinct sound synthesis engines.
 
-## Physical Modeling Engine Modes
+## Macro Potentiometer Controls
 
-The harp section supports 5 distinct sound engine models, selectable via the Web MIDI controller ([minicontrol](#minicontrol)):
+When a Plaits mode is selected, Minichord's 3 potentiometers dynamically map 1-to-1 with Plaits' macro controls:
 
-1. **Stock Subtractive Engine**: The classic Minichord sound engine built with subtractive synthesis oscillator waveforms and envelopes.
-2. **Modal Resonator**: Simulates struck acoustic structures (metal bars, glass tubes, bells, membranes, and tuned plates).
-3. **Sympathetic Strings**: Simulates virtual harp and sitar sympathetic string resonances, where excitation triggers harmonically tuned virtual string arrays.
-4. **Inharmonic String**: Non-integer overtone physical modeling for metallic and string-drum hybrids.
-5. **FM Voice**: Frequency-modulation voice based on physical exciter feedback.
+* **Pot 1 — HARMONICS**: Adjusts frequency ratio, sub-oscillator mix, or chord triad voicings.
+* **Pot 2 — TIMBRE**: Adjusts filter cutoff, wavefolder distortion, or FM modulation index.
+* **Pot 3 — MORPH**: Adjusts waveform morphing, resonance, or detune.
 
-## Resonator Sound Shaping Parameters
+## 16 Synthesis Engine Models
 
-When a physical modeling model is active, the following parameters control the physical properties of the virtual resonator:
+1. **Virtual Analog**: Dual classic square/saw oscillator pair with sub-bass.
+2. **Waveshaping**: Asymmetric triangle wavefolder with overdrive.
+3. **2-Operator FM**: Frequency modulation synth voice for electric pianos and metallic chimes.
+4. **Granular / Formant**: Formant oscillator simulating vocal chords and granular grains.
+5. **Additive**: 12-harmonic additive drawbar/organ and marimba generator.
+6. **3D Wavetable**: Morphing wavetables (PPG & ambient wavetable sweeps).
+7. **4-Voice Chord Engine**: Generates 4-voice organ/synth chords with dynamic triad drop-voicings.
+8. **Speech**: Vowel choir and SAM speech synthesizer.
+9. **Swarm**: Multi-oscillator super-saw swarm.
+10. **Noise**: Clocked digital noise and sample & hold filter.
+11. **Particle**: Dust and particle impulse generator.
+12. **Physical String**: Plucked string physical modeling.
+13. **Modal Resonator**: Metallic bell and bar physical resonator.
+14. **Bass Drum**: Analog and synthetic kick drum generator.
+15. **Snare Drum**: Analog and synthetic snare drum generator.
+16. **Hi-Hat**: Metallic noise hi-hat generator.
 
-* **Structure**: Controls overtone spacing, harmonicity/inharmonicity, and internal string coupling.
-* **Brightness**: Controls excitation filter cutoff and high-frequency damping.
-* **Damping**: Controls decay duration, resonance sustain, and energy loss.
-* **Position**: Controls where along the virtual string or membrane the excitation strike occurs.
-* **Spatial Reverb Mix**: Controls the internal physical modeling spatial reverb depth.
-* **Polyphony**: Configures between 1 and 6 simultaneous physical modeling resonator voices.
-* **Stereo Width**: Blends polyphonic voice allocation across the stereo field to prevent hard left/right voice clipping.
-
-## Master FX Suite
-
-* **PT2399 Lo-Fi Tape Delay**: Emulates analog PT2399 delay IC dynamics, complete with vintage tape clock wobble, filtering, and warm repeat damping.
-* **Soft Overdrive / Saturation**: Provides non-linear soft-clipping saturation to smooth physical modeling transients and add subtle analog warmth.
-
-## Generative Euclidean / Markov Sequencer
-
-The harp touchstrip can trigger an automated **Euclidean Arpeggiator**, generating polyrhythmic and self-playing patterns based on mathematical Euclidean rhythm distributions and Markov note transitions.
-* **Tempo**: Adjustable from 40 to 240 BPM via Web MIDI (`Address 255`).
 

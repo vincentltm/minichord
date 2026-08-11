@@ -37,11 +37,10 @@ The firmware folder contains the project firmware and necessary programming reso
 
 All software is provided under a 3-clause BSD License.
 
-### Features in the `resonator` Branch
-* **Physical Modeling Synthesis**: Integrated Mutable Instruments **Rings** resonator DSP engine (Modal, Sympathetic String, Inharmonic, and FM modes).
-* **Modular SynthEngine Architecture**: Dynamic runtime switching between stock subtractive engine and physical modeling resonator.
-* **Master Effects Suite**: Custom **PT2399 Lo-Fi Tape Delay**, soft overdrive/saturation, and stereo width cross-fading.
-* **Generative Euclidean / Markov Sequencer**: Onboard rhythm and melody generator.
+### Features in the `plaits` Branch
+* **Mutable Instruments Plaits Multi-Model Engine**: Integrated all 16 synthesis models (Virtual Analog, Waveshaper, 2-Op FM, Formant/Speech, 12-Harmonic Additive, 3D Wavetable, 4-Voice Chord Engine, Swarm, Particle, Noise, Percussion, etc.).
+* **1:1 Macro Potentiometer Mapping**: Physical potentiometers map directly to Plaits **HARMONICS** (Pot 1), **TIMBRE** (Pot 2), and **MORPH** (Pot 3).
+* **Shared DSP Architecture**: Seamless co-existence with Rings physical modeling and stock subtractive synthesis engines using shared OCRAM RAM2 memory allocation.
 * **Expanded Web MIDI Control**: Web-based parameter tweaking via [minicontrol](https://github.com/BenjaminPoilve/MiniChord/tree/main/firmware/minicontrol).
 
 In particular it contains: 
