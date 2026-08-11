@@ -18,8 +18,10 @@ class harp{
   void setup();
   void recalibrate();
   void update(debouncer (&data_array)[12]);
+  void update(debouncer (&data_array)[12], float (&pressure_array)[12]);
 
   private:
+  float smoothed_pressure_[12] = {0};
   #if CAP_CHIP==1
     AT42QT2120 touch_sensor;
     int remap_array[12]={3,4,5,6,7,8,9,10,11,2,1,0};

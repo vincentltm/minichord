@@ -17,6 +17,7 @@ class potentiometer{
   void set_alternate_range(float range);
   void set_alternate_default(int alternate_initial_value);
   void force_update();
+  void sync();
   bool update_parameter(bool alternate_flag); //the flag tells us whether the modifier button was pushed
   private:
   //Memory variable

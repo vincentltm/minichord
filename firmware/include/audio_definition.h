@@ -389,6 +389,8 @@ AudioConnection          patchCord216(chords_main_filter, 2, chords_main_filter_
 
 //MANUAL OUTPUT SECTION
 #include "effect_platervbstereo.h"
+#include "effect_pt2399_delay.h"
+
 AudioSynthWaveformDc     string_gain; 
 AudioEffectMultiply      string_multiplier;  
 AudioAmplifier           string_amplifier; 
@@ -403,13 +405,28 @@ AudioSynthWaveformDc     chords_l_stereo_gain;
 AudioSynthWaveformDc     chords_r_stereo_gain;        
 AudioEffectMultiply      chords_l_stereo_multiply;  
 AudioEffectMultiply      chords_r_stereo_multiply;  
-AudioMixer4              reverb_mixer;   
-AudioEffectPlateReverb   main_reverb;    
+
+// -- MASTER EFFECTS BUS --
+// stereo_l/r_mixer: sums all engines (ch0=strings, ch1=chords, ch3=Rings via dynamic patchcord)
 AudioMixer4              stereo_l_mixer;        
-AudioMixer4              stereo_r_mixer;   
+AudioMixer4              stereo_r_mixer;
+
+// Custom PT2399-style downsampled stereo delay (50ms to 2.5s)
+AudioEffectPT2399Delay   pt2399_delay;
+
+// Reverb send mixers: stereo input into main_reverb (ch0=L, ch1=R)
+AudioMixer4              reverb_send_l;          // ch0=pt2399_delay L
+AudioMixer4              reverb_send_r;          // ch0=pt2399_delay R
+AudioMixer4              reverb_mixer;           // Alias for sysex compatibility
+AudioEffectPlateReverb   main_reverb;
+
+// Final output: sums pt2399_delay (dry+wet) with reverb wet
+AudioMixer4              final_out_l;            // ch0=pt2399_delay_l, ch1=reverb_l
+AudioMixer4              final_out_r;            // ch0=pt2399_delay_r, ch1=reverb_r
 AudioOutputI2S           DAC_out;    
 AudioOutputUSB           USB_out;      
 
+// -- Stock Engine → Stereo Mixer (unchanged) --
 AudioConnection          patchCord2000(string_filter_mixer, 0, string_multiplier, 0);
 AudioConnection          patchCord2001(string_gain, 0, string_multiplier, 1);
 AudioConnection          patchCord2002(string_multiplier, 0, string_amplifier, 0);
@@ -419,7 +436,6 @@ AudioConnection          patchCord2005(string_amplifier, 0, string_r_stereo_mult
 AudioConnection          patchCord2006(string_r_stereo_gain, 0, string_r_stereo_multiply, 1);
 AudioConnection          patchCord2007(string_r_stereo_multiply, 0, stereo_r_mixer, 0);
 AudioConnection          patchCord2008(string_l_stereo_multiply, 0, stereo_l_mixer, 0);
-AudioConnection          patchCord2009(string_amplifier, 0, reverb_mixer, 0);
 
 AudioConnection          patchCord2010(chords_main_filter_mixer, 0, chords_multiplier, 0);
 AudioConnection          patchCord2011(chords_gain, 0, chords_multiplier, 1);
@@ -430,14 +446,26 @@ AudioConnection          patchCord2015(chords_amplifier, 0, chords_r_stereo_mult
 AudioConnection          patchCord2016(chords_r_stereo_gain, 0, chords_r_stereo_multiply, 1);
 AudioConnection          patchCord2017(chords_r_stereo_multiply, 0, stereo_r_mixer, 1);
 AudioConnection          patchCord2018(chords_l_stereo_multiply, 0, stereo_l_mixer, 1);
-AudioConnection          patchCord2019(chords_amplifier, 0, reverb_mixer, 1);
+// Note: Rings connects dynamically to stereo_l/r_mixer ch3 in main.cpp setup()
 
-AudioConnection          patchCord2020(reverb_mixer, 0, main_reverb, 0);
-AudioConnection          patchCord2021(main_reverb, 0, stereo_r_mixer, 2);
-AudioConnection          patchCord2022(main_reverb, 1, stereo_l_mixer, 2);
+// -- PT2399 Stereo Delay Insert (stereo_mixer -> pt2399_delay) --
+AudioConnection          patchCord2030(stereo_l_mixer, 0, pt2399_delay, 0);
+AudioConnection          patchCord2031(stereo_r_mixer, 0, pt2399_delay, 1);
 
-AudioConnection          patchCord2023(stereo_l_mixer, 0, DAC_out, 1);
-AudioConnection          patchCord2024(stereo_r_mixer, 0, DAC_out, 0);
+// -- Reverb Send: fed from PT2399 delay output --
+AudioConnection          patchCord2060(pt2399_delay, 0, reverb_send_l, 0);
+AudioConnection          patchCord2061(pt2399_delay, 1, reverb_send_r, 0);
+AudioConnection          patchCord2062(reverb_send_l, 0, main_reverb, 0);             // Left -> Reverb in 0
+AudioConnection          patchCord2063(reverb_send_r, 0, main_reverb, 1);             // Right -> Reverb in 1
 
-AudioConnection          patchCord2025(stereo_l_mixer, 0, USB_out, 1);
-AudioConnection          patchCord2026(stereo_r_mixer, 0, USB_out, 0);
+// -- Final Output: PT2399 delay (dry+wet) + reverb wet --
+AudioConnection          patchCord2070(pt2399_delay, 0, final_out_l, 0);  // delay return L
+AudioConnection          patchCord2071(pt2399_delay, 1, final_out_r, 0);  // delay return R
+AudioConnection          patchCord2072(main_reverb, 0, final_out_l, 1);   // reverb L wet
+AudioConnection          patchCord2073(main_reverb, 1, final_out_r, 1);   // reverb R wet
+
+// -- Hardware Output --
+AudioConnection          patchCord2080(final_out_l, 0, DAC_out, 1);
+AudioConnection          patchCord2081(final_out_r, 0, DAC_out, 0);
+AudioConnection          patchCord2082(final_out_l, 0, USB_out, 1);
+AudioConnection          patchCord2083(final_out_r, 0, USB_out, 0);

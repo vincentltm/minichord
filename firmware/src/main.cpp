@@ -10,9 +10,30 @@
 #include <debouncer.h>
 #include <harp.h>
 #include <potentiometer.h>
+#include "engine_interface.h"
+#include "engine_manager.h"
+#include "engine_stock.h"
+#include "engine_rings.h"
+#include "generative_sequencer.h"
+#include "master_effects.h"
 
 //>>SOFWTARE VERSION 
 int version_ID=8; //to be read 00.03, stored at adress 7 in memory
+//>>ENGINE MANAGEMENT<<
+#include <new>
+EngineManager modeManager;
+EngineStock stockEngine;
+DMAMEM static uint8_t rings_engine_memory[sizeof(EngineRings)] __attribute__((aligned(4)));
+EngineRings* ringsEngine = nullptr;
+AudioConnection* patchCordRingsL = nullptr;
+AudioConnection* patchCordRingsR = nullptr;
+bool shift_held = false;
+// >>HOLD BUTTON MODIFIER STATE<<
+bool hold_button_raw_pressed = false;   // true while hold button is physically down
+bool hold_knob_moved = false;           // true if any knob moved while hold was pressed
+bool generative_seq_enabled = true;     // true for Rings default, togglable via SysEx
+GenerativeSequencer genSequencer;
+MasterEffects masterEffects;
 //>>BUTTON ARRAYS<<
 debouncer harp_array[12];
 debouncer chord_matrix_array[22];
@@ -108,7 +129,7 @@ bool change_held_strings = false; // to control wether hold strings change with 
 bool chromatic_harp_mode = false; // to switch the harp to chromatic mode
 //>>SYSEX PARAMETERS<<
 // SYSEX midi message are used to control up to 256 synthesis parameters.
-const uint16_t parameter_size = 256;
+const uint16_t parameter_size = 272; // Extended for independent Rings chord/harp params (256-263)
 const uint8_t preset_number = 12;
 int16_t default_bank_sysex_parameters[preset_number][parameter_size] = {
   {0,0,50,50,512,512,512,0,0,0,192,100,49,100,184,100,157,100,0,0,0,0,0,0,43,0,50,37,38,67,0,0,0,0,0,0,0,0,0,0,0,16,0,8,8,12,42,1171,1,423,20,70,3,35,83,59,2658,1,0,0,0,0,0,0,0,1,1,1,100,1,1,0,1,1,1,1,14,0,0,70,0,0,0,100,0,6,0,0,755,195,23,61,29,0,0,0,0,162,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,13,8,100,16,0,200,0,0,50,0,50,18,32,50,0,0,10,66,353,65,995,1,569,16,141,32,83,28,48,54,1,0,0,0,56,0,389,0,20,0,0,0,0,1,1,1,0,1,1,0,1,1,1,1,0,0,0,70,0,0,0,100,0,64,0,0,80,16,4,94,753,474,70,5,100,100,100,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,16,0,6,6,32,0,6,0,16,0,6,6,32,0,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
@@ -668,18 +689,63 @@ void rythm_tick_function() {
     rythm_timer.update(long_timer_period);
     current_long_period = true;
   }
-  u_int8_t result;
-  result = rythm_pattern[rythm_current_step];
-  for (int i = 6; i >= 0; i--) {
-    if (result & (1 << i)) {
-      int current_voice=0;
-      if(i<4){
-        current_voice=i;
-      }else{
-        current_voice=i-3;
+
+  // -- Generative Sequencer or Normal Pattern --
+  if (genSequencer.isEnabled()) {
+    // Generative fractal sequencer: tick and route events to active engine
+    SequencerEvent evt = genSequencer.tick();
+    if (evt.active) {
+      if (modeManager.currentModeIndex() == 0) {
+        // Stock engine: use the sequencer's note + voice index
+        set_chord_voice_frequency(evt.voiceIndex, evt.noteValue);
+        play_note_selected_duration(evt.voiceIndex, evt.noteValue);
+      } else {
+        // Rings engine: route through onSequencerNote
+        modeManager.activeEngine()->onSequencerNote(evt.voiceIndex, evt.noteValue, evt.accent);
       }
-      set_chord_voice_frequency(current_voice, rythm_freeze_current_chord_notes[i]);
-      play_note_selected_duration(current_voice, rythm_freeze_current_chord_notes[i]);
+      // Handle ratchet: fire a second trigger after a short delay
+      // (ratchets subdivide the step for rhythmic interest)
+      if (evt.ratchet) {
+        // Schedule a second hit at half the step duration
+        // We reuse note_timer[0] for ratchet retriggers
+        uint8_t ratchet_voice = evt.voiceIndex;
+        uint8_t ratchet_note = evt.noteValue;
+        if (modeManager.currentModeIndex() == 0) {
+          note_timer[0].priority(253);
+          note_timer[0].begin([ratchet_voice, ratchet_note] {
+            note_timer[0].end();
+            set_chord_voice_frequency(ratchet_voice, ratchet_note);
+            play_note_selected_duration(ratchet_voice, ratchet_note);
+          }, (current_long_period ? long_timer_period : short_timer_period) / 2);
+        } else {
+          // For Rings, trigger another strum after half-step
+          note_timer[0].priority(253);
+          note_timer[0].begin([ratchet_voice, ratchet_note] {
+            note_timer[0].end();
+            modeManager.activeEngine()->onSequencerNote(ratchet_voice, ratchet_note, 0.7f);
+          }, (current_long_period ? long_timer_period : short_timer_period) / 2);
+        }
+      }
+    }
+  } else {
+    // Normal pattern sequencer (original behavior)
+    u_int8_t result;
+    result = rythm_pattern[rythm_current_step];
+    for (int i = 6; i >= 0; i--) {
+      if (result & (1 << i)) {
+        int current_voice=0;
+        if(i<4){
+          current_voice=i;
+        }else{
+          current_voice=i-3;
+        }
+        if (modeManager.currentModeIndex() == 0) {
+          set_chord_voice_frequency(current_voice, rythm_freeze_current_chord_notes[i]);
+          play_note_selected_duration(current_voice, rythm_freeze_current_chord_notes[i]);
+        } else {
+          if (ringsEngine) ringsEngine->triggerRhythmStep(i, rythm_freeze_current_chord_notes[i]);
+        }
+      }
     }
   }
   rythm_current_step = (rythm_current_step + 1) % rythm_loop_length;
@@ -799,20 +865,21 @@ void load_config(int bank_number) {
 }
 
 void setup() {
+  pinMode(_MUTE_PIN, OUTPUT);
+  digitalWrite(_MUTE_PIN, LOW);  // Hardware DAC mute active during startup
   Serial.begin(9600);
-  Serial.println("Initialising audio parameters");
-  AudioMemory(1200);
-  //>>STATIC AUDIO PARAMETERS
-  // the waveshaper
+
+  // Clear static DMAMEM RAM2 delay & reverb buffers BEFORE starting AudioMemory interrupts
+  masterEffects.init();
+  pt2399_delay.clear();
+
+  AudioMemory(450);  // Base audio blocks (PT2399 delay uses static DMAMEM memory)
   calculate_ws_array();
   chord_waveshape.shape(wave_shape, 257);
   string_waveshape.shape(wave_shape, 257);
-  //the base DC value for strings
   filter_dc.amplitude(1);
-  // the delay passthrough
   string_delay_mix.gain(0, 1);
   chord_delay_mix.gain(0, 1);
-  // simple mixers
   string_vibrato_mixer.gain(0,0.5);
   string_vibrato_mixer.gain(1,0.5);
   envelope_string_vibrato_dc.sustain(0);
@@ -831,23 +898,19 @@ void setup() {
     chord_voice_mixer_array[i]->gain(1, 1);
     chord_voice_mixer_array[i]->gain(2, 1);
     chord_noise_array[i]->amplitude(0.5);
-    //we hardcode the frequency modulation. Now intensity of the effect will be depending on the mixer gain 
     chord_osc_1_array[i]->frequencyModulation(2);
     chord_osc_2_array[i]->frequencyModulation(2);
     chord_osc_3_array[i]->frequencyModulation(2);
-    //Now the max value of the vibrato is 0.25 for each component and we add 0.5 for pitch selection. With the multiplication by freqmodulation of 2, we maintain the rate we had before. 
     chord_vibrato_mixer_array[i]->gain(1,0.5); 
-
-    chord_vibrato_dc_envelope_array[i]->sustain(0); //for the pitch bend no need for sustain
+    chord_vibrato_dc_envelope_array[i]->sustain(0);
     transient_full_mix.gain(i, 1);
     all_string_mix.gain(i, 1);
   }
   for(int i=0;i<12;i++){
-    string_transient_envelope_array[i]->sustain(0);//don't need sustain for the transient
+    string_transient_envelope_array[i]->sustain(0);
   }
-  all_string_mix.gain(3,0.02); //for the transient
+  all_string_mix.gain(3,0.02);
 
-  // initialising the rest of the hardware
   chord_matrix.setup();
   harp_sensor.setup();
   harp_sensor.recalibrate();
@@ -858,38 +921,83 @@ void setup() {
   if (continuous_chord) {
     analogWrite(RYTHM_LED_PIN, 255);
   }
-  // loading the preset
   Serial.println("Initialising filesystem");
-  if (!myfs.begin(1024 * 1024)) { // Need to check that size
+  if (!myfs.begin(1024 * 1024)) {
     Serial.printf("Error starting %s\n", "Program flash DISK");
     while (1) {
-      set_led_color(0, 1.0, 1.0); // turn red light
+      set_led_color(0, 1.0, 1.0);
     }
   }
   Serial.println("Loading the preset");
   load_config(current_bank_number);
-  // initializing the strings
   for (int i = 0; i < 12; i++) {
     current_harp_notes[i] = calculate_note_harp(i, slash_chord, sharp_active);
   }
-  //Checking the battery 
   LBO_flag.set(digitalRead(BATT_LBO_PIN));
   uint8_t LBO_value = LBO_flag.read_value();
   if (LBO_value == 0) {
     led_blinking_flag=true;
   }
 
+  // Register sound engines/modes
+  stockEngine.setCallbacks(
+    []() {
+      string_amplifier.gain(1.0f);
+      chords_amplifier.gain(continuous_chord ? 1.0f : 0.0f);
+      stereo_l_mixer.gain(3, 0.0f);
+      stereo_r_mixer.gain(3, 0.0f);
+    },
+    []() {
+      string_amplifier.gain(0.0f);
+      chords_amplifier.gain(0.0f);
+      stereo_l_mixer.gain(3, 1.0f);
+      stereo_r_mixer.gain(3, 1.0f);
+    }
+  );
+  ringsEngine = new (rings_engine_memory) EngineRings();
+  ringsEngine->init();
+  patchCordRingsL = new AudioConnection(ringsEngine->getStream(), 0, stereo_l_mixer, 3);
+  patchCordRingsR = new AudioConnection(ringsEngine->getStream(), 1, stereo_r_mixer, 3);
+
+  modeManager.registerMode("Stock", &stockEngine, -1);
+  modeManager.registerMode("Modal", ringsEngine, rings::RESONATOR_MODEL_MODAL);
+  modeManager.registerMode("Sympathetic", ringsEngine, rings::RESONATOR_MODEL_SYMPATHETIC_STRING);
+  modeManager.registerMode("Inharmonic", ringsEngine, rings::RESONATOR_MODEL_STRING);
+  modeManager.registerMode("FM", ringsEngine, rings::RESONATOR_MODEL_FM_VOICE);
+
+  // Explicitly activate Stock mode at boot — ensures Rings mixer channel is muted
+  // and prevents the boot plonk from Rings resonators initializing while audible.
+  stockEngine.activate();
+
+  // Initialize master effects bus (delay + reverb)
+  masterEffects.init();
+  // Final output mixers: ch0 = delay return (dry+wet), ch1 = reverb (1.2 boost)
+  final_out_l.gain(0, 1.0f);
+  final_out_l.gain(1, 1.2f);
+  final_out_r.gain(0, 1.0f);
+  final_out_r.gain(1, 1.2f);
+
+  // Initialize generative sequencer
+  genSequencer.setEnabled(true);
+  genSequencer.setDensity(0.75f);
+  genSequencer.setPath(0.0f);
+  genSequencer.setMutation(0.0f);
+  genSequencer.setSeed(current_applied_chord_notes);
 
   Serial.println("Initialisation complete");
+  pinMode(_MUTE_PIN, OUTPUT);
   digitalWrite(_MUTE_PIN, HIGH);
 }
 
 void handle_chords_button() {
   int sharp_transition = chord_matrix_array[0].read_transition();
-  if (sharp_transition > 1 && current_line != -1) {
-    button_pushed = true;
+  shift_held = chord_matrix_array[0].read_value();
+  if (sharp_transition > 1) {
+    if (current_line != -1) {
+      button_pushed = true;
+    }
   }
-  sharp_active = chord_matrix_array[0].read_value();
+  sharp_active = shift_held;
 
   for (int i = 1; i < 22; i++) {
     int value = chord_matrix_array[i].read_transition();
@@ -907,37 +1015,53 @@ void handle_chords_button() {
   }
 }
 
+static float harp_pressures[12] = {0};
+
 void handle_harp() {
-  harp_sensor.update(harp_array);
+  harp_sensor.update(harp_array, harp_pressures);
   for (int i = 0; i < 12; i++) {
     int value = harp_array[i].read_transition();
+    float press = harp_pressures[i];
     if (value == 2) {
-      set_harp_voice_frequency(i, current_harp_notes[i]);
-      AudioNoInterrupts();
-      envelope_string_vibrato_lfo.noteOn();
-      envelope_string_vibrato_dc.noteOn();
-      string_enveloppe_filter_array[i]->noteOn();
-      string_enveloppe_array[i]->noteOn();
-      string_transient_envelope_array[i]->noteOn();
-      AudioInterrupts();
-      if (harp_started_notes[i] != 0) {
-        usbMIDI.sendNoteOff(harp_started_notes[i], harp_release_velocity, harp_channel, harp_port);
+      if (modeManager.currentModeIndex() == 0) {
+        // Stock engine: trigger string envelopes and MIDI
+        set_harp_voice_frequency(i, current_harp_notes[i]);
+        AudioNoInterrupts();
+        envelope_string_vibrato_lfo.noteOn();
+        envelope_string_vibrato_dc.noteOn();
+        string_enveloppe_filter_array[i]->noteOn();
+        string_enveloppe_array[i]->noteOn();
+        string_transient_envelope_array[i]->noteOn();
+        AudioInterrupts();
+        if (harp_started_notes[i] != 0) {
+          usbMIDI.sendNoteOff(harp_started_notes[i], harp_release_velocity, harp_channel, harp_port);
+          usbMIDI.send_now(); delayMicroseconds(midi_buffer_delay);
+        }
+        usbMIDI.sendNoteOn(midi_base_note_transposed + current_harp_notes[i], harp_attack_velocity, harp_channel, harp_port);
         usbMIDI.send_now(); delayMicroseconds(midi_buffer_delay);
+        harp_started_notes[i] = midi_base_note_transposed + current_harp_notes[i];
+      } else {
+        // Rings engine: pluck the resonator at this pad's pitch with touch pressure
+        modeManager.activeEngine()->onHarpTouch(i, true, current_harp_notes[i], press);
       }
-      usbMIDI.sendNoteOn(midi_base_note_transposed + current_harp_notes[i], harp_attack_velocity, harp_channel, harp_port);
-      usbMIDI.send_now(); delayMicroseconds(midi_buffer_delay);
-      harp_started_notes[i] = midi_base_note_transposed + current_harp_notes[i];
     } else if (value == 1) {
-      AudioNoInterrupts();
-      string_enveloppe_array[i]->noteOff();
-      string_transient_envelope_array[i]->noteOff();
-      string_enveloppe_filter_array[i]->noteOff();
-      AudioInterrupts();
-      if (harp_started_notes[i] != 0) {
-        usbMIDI.sendNoteOff(harp_started_notes[i], harp_release_velocity, harp_channel, harp_port);
-        usbMIDI.send_now(); delayMicroseconds(midi_buffer_delay);
-        harp_started_notes[i] = 0;
+      if (modeManager.currentModeIndex() == 0) {
+        AudioNoInterrupts();
+        string_enveloppe_array[i]->noteOff();
+        string_transient_envelope_array[i]->noteOff();
+        string_enveloppe_filter_array[i]->noteOff();
+        AudioInterrupts();
+        if (harp_started_notes[i] != 0) {
+          usbMIDI.sendNoteOff(harp_started_notes[i], harp_release_velocity, harp_channel, harp_port);
+          usbMIDI.send_now(); delayMicroseconds(midi_buffer_delay);
+          harp_started_notes[i] = 0;
+        }
+      } else {
+        modeManager.activeEngine()->onHarpTouch(i, false, current_harp_notes[i], 0.0f);
       }
+    } else if (harp_array[i].read_value() && modeManager.currentModeIndex() > 0) {
+      // Continuous pressure / aftertouch update while pad is held
+      modeManager.activeEngine()->onHarpTouch(i, true, current_harp_notes[i], press);
     }
   }
 }
@@ -978,10 +1102,10 @@ void detect_slash() {
 }
 
 void update_chord_notes() {
+  for (int i = 0; i < 7; i++) {
+    current_chord_notes[i] = calculate_note_chord(i, slash_chord, sharp_active);
+  }
   if (button_pushed) {
-    for (int i = 0; i < 7; i++) {
-      current_chord_notes[i] = calculate_note_chord(i, slash_chord, sharp_active);
-    }
     Serial.println("Updating frequencies");
     if (!rythm_mode && !trigger_chord && !retrigger_chord) {
       for (int i = 0; i < 4; i++) {
@@ -1073,66 +1197,135 @@ void handle_continuous_mode() {
   }
 }
 
+static elapsedMillis time_since_hold_down;
+static elapsedMillis time_since_last_tap_press;
+
 void handle_hold_button() {
   uint8_t hold_transition = hold_button.read_transition();
+  
   if (hold_transition == 2) {
-    if (!rythm_mode) {
-      Serial.println("Switching mode");
-      continuous_chord = !continuous_chord;
-      analogWrite(RYTHM_LED_PIN, 255 * continuous_chord);
-      if (current_line == -1) {
-        trigger_chord = true;
-      }
-    } else {
-      if (since_last_button_push > 100 && since_last_button_push < 2000) {
-        rythm_bpm = (rythm_bpm * 5.0 + 60 * 1000 / since_last_button_push) / 6.0;
-        Serial.print("Updating the BPM to: ");
-        Serial.println(rythm_bpm);
-        recalculate_timer();
+    // -- BUTTON PRESS DOWN --
+    hold_button_raw_pressed = true;
+    hold_knob_moved = false;
+    time_since_hold_down = 0;  // Measure hold duration for long press detection
+
+    // Tap Tempo: Measure time interval between consecutive button PRESSES
+    uint32_t press_interval = time_since_last_tap_press;
+    time_since_last_tap_press = 0;
+
+    if (rythm_mode && press_interval > 180 && press_interval < 2500) {
+      float tapped_bpm = 60000.0f / (float)press_interval;
+      // Fast, responsive 60/40 weighted average so 2 taps update BPM instantly
+      rythm_bpm = 0.4f * rythm_bpm + 0.6f * tapped_bpm;
+      if (rythm_bpm < 30.0f) rythm_bpm = 30.0f;
+      if (rythm_bpm > 300.0f) rythm_bpm = 300.0f;
+
+      Serial.print("Tap tempo updated BPM: ");
+      Serial.println(rythm_bpm);
+      recalculate_timer();
+      if (rythm_timer_running) {
         rythm_timer.update(current_long_period ? long_timer_period : short_timer_period);
       }
     }
-    since_last_button_push = 0;
-  } else if (hold_transition == 1 && since_last_button_push > 800) {
-    Serial.println("Long push, switching rhythm mode");
-    rythm_mode = !rythm_mode;
-    continuous_chord = false;
-    analogWrite(RYTHM_LED_PIN, 255 * continuous_chord);
-    if (rythm_mode) {
-      rythm_current_step = 0;
-      Serial.println("Starting rhythm timers");
-      rythm_timer.priority(254);
-      rythm_timer.begin(rythm_tick_function, short_timer_period);
-      rythm_timer_running = true;
-      rythm_timer.update(long_timer_period);
-      current_long_period = true;
-    } else {
-      Serial.println("Stopping rhythm timers");
-      rythm_timer.end();
-      rythm_timer_running = false;
+  } else if (hold_transition == 1) {
+    // -- BUTTON RELEASE --
+    hold_button_raw_pressed = false;
+    uint32_t hold_duration = time_since_hold_down;
+
+    // Only fire toggle actions if no knobs were moved while held
+    if (!hold_knob_moved) {
+      if (hold_duration >= 600) {
+        // LONG PRESS HOLD (duration >= 600ms): Toggle Rhythm / Arp Mode ON/OFF
+        rythm_mode = !rythm_mode;
+        continuous_chord = false;
+        analogWrite(RYTHM_LED_PIN, 0);
+        modeManager.activeEngine()->onHoldToggle(false);
+
+        if (rythm_mode) {
+          rythm_current_step = 0;
+          rythm_timer.priority(254);
+          rythm_timer.begin(rythm_tick_function, short_timer_period);
+          rythm_timer_running = true;
+          rythm_timer.update(long_timer_period);
+          current_long_period = true;
+          Serial.println("Rhythm mode ENABLED");
+        } else {
+          rythm_timer.end();
+          rythm_timer_running = false;
+          Serial.println("Rhythm mode DISABLED");
+        }
+      } else {
+        // SHORT CLICK (duration < 600ms):
+        // If rhythm mode is off, short click toggles continuous chord hold
+        if (!rythm_mode) {
+          continuous_chord = !continuous_chord;
+          analogWrite(RYTHM_LED_PIN, continuous_chord ? 255 : 0);
+          modeManager.activeEngine()->onHoldToggle(continuous_chord);
+          if (current_line == -1) {
+            trigger_chord = true;
+          }
+        }
+        // If rhythm mode is on, tap tempo was already handled on PRESS DOWN!
+      }
     }
   }
 }
 
 void handle_preset_change() {
+  // Unified 16-slot cycling:
+  // Banks 0-11: Stock subtractive presets (a-l)
+  // Bank 12: Modal resonator
+  // Bank 13: Sympathetic strings
+  // Bank 14: Inharmonic string
+  // Bank 15: FM voice
+  static const int TOTAL_BANKS = 16;
+  static const int RINGS_START = 12;
+  static const rings::ResonatorModel rings_models[] = {
+    rings::RESONATOR_MODEL_MODAL,
+    rings::RESONATOR_MODEL_SYMPATHETIC_STRING,
+    rings::RESONATOR_MODEL_STRING,
+    rings::RESONATOR_MODEL_FM_VOICE
+  };
+  static const char* rings_names[] = {"Modal", "Sympathetic", "Inharmonic", "FM"};
+
+  int prev_bank = current_bank_number;
+
   if (up_button.read_transition() > 1) {
-    Serial.println("Switching to next preset");
-    if (!sysex_controler_connected && flag_save_needed) {
+    if (!sysex_controler_connected && flag_save_needed && current_bank_number < RINGS_START) {
       save_config(current_bank_number, false);
     }
-    current_bank_number = (current_bank_number + 1) % 12;
-    load_config(current_bank_number);
+    current_bank_number = (current_bank_number + 1) % TOTAL_BANKS;
   }
   if (down_button.read_transition() > 1) {
-    Serial.println("Switching to last preset");
-    if (!sysex_controler_connected && flag_save_needed) {
+    if (!sysex_controler_connected && flag_save_needed && current_bank_number < RINGS_START) {
       save_config(current_bank_number, false);
     }
-    current_bank_number = (current_bank_number - 1);
-    if (current_bank_number == -1) {
-      current_bank_number = 11;
+    current_bank_number = (current_bank_number - 1 + TOTAL_BANKS) % TOTAL_BANKS;
+  }
+
+  if (current_bank_number != prev_bank) {
+    bool was_rings = prev_bank >= RINGS_START;
+    bool is_rings = current_bank_number >= RINGS_START;
+
+    if (is_rings) {
+      // Entering or staying in Rings mode
+      int rings_idx = current_bank_number - RINGS_START;
+      // Set target Rings resonator model before activating audio stream
+      ringsEngine->setModel(rings_models[rings_idx]);
+      modeManager.setModeIndex(1 + rings_idx);  // modes 1-4 are rings
+      Serial.print("> Mode: ");
+      Serial.println(rings_names[rings_idx]);
+      float hue = ringsEngine->ledHue();
+      set_led_color(hue, 1.0, 1.0 - led_attenuation);
+    } else {
+      // Stock preset
+      if (was_rings) {
+        // Transition rings → stock: unmute stock, mute rings
+        modeManager.setModeIndex(0);
+        Serial.println("> Mode: Stock");
+      }
+      load_config(current_bank_number);
     }
-    load_config(current_bank_number);
   }
 }
 
@@ -1202,16 +1395,101 @@ void loop() {
     handle_rhythm_mode();
   }
 
-  // Handle potentiometer updates
+  // Handle potentiometer updates (potentiometer objects handle change-detection & thresholding)
+  // Stock engine pots only update when in Stock engine (mode 0) and not in hold-pressed modifier mode
   bool alternate = chord_matrix_array[0].read_value();
-  flag_save_needed |= chord_pot.update_parameter(alternate);
-  flag_save_needed |= harp_pot.update_parameter(alternate);
-  flag_save_needed |= mod_pot.update_parameter(alternate);
+  if (!hold_button_raw_pressed && modeManager.currentModeIndex() == 0) {
+    flag_save_needed |= chord_pot.update_parameter(alternate);
+    flag_save_needed |= harp_pot.update_parameter(alternate);
+    flag_save_needed |= mod_pot.update_parameter(alternate);
+  }
+
+  // -- Three-layer knob modifier system --
+  // Reads raw pot values and routes them based on modifier state:
+  //   Normal / Shifted → engine onPotChange (volume, structure, etc.)
+  //   Hold pressed → generative sequencer (density, path, mutation)
+  //   Shift + Hold pressed → master effects (delay time, feedback+mix, reverb)
+  {
+    static float last_pot_vals[3] = {-1.0f, -1.0f, -1.0f};
+    static bool last_shift_state = false;
+    static bool last_hold_state = false;
+
+    float val0 = (1023.0f - analogRead(POT_CHORD_PIN)) / 1023.0f;
+    float val1 = (1023.0f - analogRead(POT_HARP_PIN)) / 1023.0f;
+    float val2 = (1023.0f - analogRead(POT_MOD_PIN)) / 1023.0f;
+
+    // Reset reference positions on any modifier state change to prevent parameter jumps
+    if (alternate != last_shift_state || hold_button_raw_pressed != last_hold_state) {
+      last_shift_state = alternate;
+      last_hold_state = hold_button_raw_pressed;
+      last_pot_vals[0] = val0;
+      last_pot_vals[1] = val1;
+      last_pot_vals[2] = val2;
+
+      // Sync stock engine potentiometer objects so releasing modifiers never jumps sound parameters
+      chord_pot.sync();
+      harp_pot.sync();
+      mod_pot.sync();
+    }
+
+    // Check each knob for movement past threshold (1.5%)
+    bool knob0_moved = (last_pot_vals[0] < 0.0f || fabsf(val0 - last_pot_vals[0]) > 0.015f);
+    bool knob1_moved = (last_pot_vals[1] < 0.0f || fabsf(val1 - last_pot_vals[1]) > 0.015f);
+    bool knob2_moved = (last_pot_vals[2] < 0.0f || fabsf(val2 - last_pot_vals[2]) > 0.015f);
+
+    if (knob0_moved || knob1_moved || knob2_moved) {
+      // Track that a knob was moved while hold was pressed (suppresses toggle on release)
+      if (hold_button_raw_pressed) {
+        hold_knob_moved = true;
+      }
+
+      if (hold_button_raw_pressed && alternate) {
+        // -- SHIFT + HOLD: Master Effects Control --
+        if (knob0_moved) { last_pot_vals[0] = val0; masterEffects.setDelayTime(val0); }
+        if (knob1_moved) { last_pot_vals[1] = val1; masterEffects.setDelayFeedbackMix(val1); }
+        if (knob2_moved) { last_pot_vals[2] = val2; masterEffects.setReverbAmount(val2); }
+      } else if (hold_button_raw_pressed && !alternate) {
+        // -- HOLD only: Generative Sequencer Control --
+        if (knob0_moved) { last_pot_vals[0] = val0; genSequencer.setDensity(val0); }
+        if (knob1_moved) { last_pot_vals[1] = val1; genSequencer.setPath(val1); }
+        if (knob2_moved) { last_pot_vals[2] = val2; genSequencer.setMutation(val2); }
+      } else if (modeManager.currentModeIndex() > 0) {
+        // -- Rings Engine (modes > 0): Route Normal / Shifted knobs to active Rings engine --
+        if (knob0_moved) { last_pot_vals[0] = val0; modeManager.activeEngine()->onPotChange(0, val0, alternate, false); }
+        if (knob1_moved) { last_pot_vals[1] = val1; modeManager.activeEngine()->onPotChange(1, val1, alternate, false); }
+        if (knob2_moved) { last_pot_vals[2] = val2; modeManager.activeEngine()->onPotChange(2, val2, alternate, false); }
+      }
+    }
+  }
+
+  // Update master effects parameter smoothing
+  masterEffects.update();
+
+  // -- Generative Sequencer Tick --
+  // When enabled and rhythm mode is active, the generative sequencer fires
+  // on the same rhythm clock as the normal sequencer
+  if (genSequencer.isEnabled() && rythm_mode) {
+    // Update seed when chord changes
+    static uint8_t last_gen_seed[4] = {0, 0, 0, 0};
+    bool seed_changed = false;
+    for (int i = 0; i < 4; i++) {
+      if (current_applied_chord_notes[i] != last_gen_seed[i]) {
+        seed_changed = true;
+        last_gen_seed[i] = current_applied_chord_notes[i];
+      }
+    }
+    if (seed_changed) {
+      genSequencer.setSeed(last_gen_seed);
+    }
+  }
 
   // Handle continuous mode logic
   if (!continuous_chord && !rythm_mode) {
     handle_continuous_mode();
   }
+
+  // Handle chord button transitions
+  handle_chords_button();
 
   // Handle chord logic
   if (current_line >= 0) {
@@ -1221,14 +1499,43 @@ void loop() {
     bool button_min = chord_matrix_array[2 + current_line * 3].read_value();
     bool button_seventh = chord_matrix_array[3 + current_line * 3].read_value();
     handle_chord_type(button_maj, button_min, button_seventh);
-    update_chord_notes(); // Replaced updateNotes() with update_chord_notes()
-    update_harp_notes();  // Added call to update_harp_notes()
-    trigger_chord_notes();
+    update_chord_notes();
+    update_harp_notes();
+    if (modeManager.currentModeIndex() == 0) {
+      // Stock engine: trigger chord notes with envelopes and MIDI
+      trigger_chord_notes();
+    } else {
+      // Rings engine: route chord change ONLY when a chord button is actively pressed
+      static int last_sent_line = -1;
+      static bool last_sent_maj = false, last_sent_min = false, last_sent_sev = false;
+      static bool last_sent_slash = false;
+      static uint8_t last_sent_slash_val = 0;
+      bool is_any_pressed = (button_maj || button_min || button_seventh);
+
+      if (is_any_pressed && (current_line != last_sent_line || button_maj != last_sent_maj || button_min != last_sent_min || button_seventh != last_sent_sev || slash_chord != last_sent_slash || slash_value != last_sent_slash_val)) {
+        last_sent_line = current_line;
+        last_sent_maj = button_maj;
+        last_sent_min = button_min;
+        last_sent_sev = button_seventh;
+        last_sent_slash = slash_chord;
+        last_sent_slash_val = slash_value;
+        modeManager.activeEngine()->onChordChange(fundamental, current_chord_notes, sharp_active, button_maj, button_min, button_seventh);
+      } else if (!is_any_pressed) {
+        last_sent_line = -1;
+        last_sent_maj = false;
+        last_sent_min = false;
+        last_sent_sev = false;
+        last_sent_slash = false;
+        last_sent_slash_val = 0;
+      }
+    }
+  } else {
+    // No chord button held
+    if (modeManager.currentModeIndex() > 0) {
+      modeManager.activeEngine()->onChordRelease();
+    }
   }
 
-  // Handle chord button transitions
-  handle_chords_button();
-
-  // Handle harp functions
+  // Handle harp functions (events are routed to engines inline)
   handle_harp();
 }

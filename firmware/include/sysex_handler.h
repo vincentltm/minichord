@@ -95,6 +95,7 @@ void apply_audio_parameter(int adress, int value) {
         break;
       case 2:
         string_gain.amplitude(value/100.0,100);  harp_attack_velocity=value/100.0*127;
+        if (ringsEngine) ringsEngine->applyParameter(adress, value);
         break;
       case 99:
         for (int i=0;i<12;i++){
@@ -304,7 +305,7 @@ void apply_audio_parameter(int adress, int value) {
         strings_effect_mix.gain(1,value/100.0);
         break;
       case 85:
-        reverb_mixer.gain(0,value/100.0);string_r_stereo_gain.amplitude((1-reverb_dry_proportion*value/100.0)*pan,100);string_l_stereo_gain.amplitude(1-reverb_dry_proportion*value/100.0,100);
+        reverb_send_l.gain(0,value/100.0);reverb_mixer.gain(0,value/100.0);string_r_stereo_gain.amplitude((1-reverb_dry_proportion*value/100.0)*pan,100);string_l_stereo_gain.amplitude(1-reverb_dry_proportion*value/100.0,100);
         break;
       case 86:
         string_waveshaper_mix.gain(0,1-value/100.0);string_waveshaper_mix.gain(1,value/100.0);
@@ -344,6 +345,7 @@ void apply_audio_parameter(int adress, int value) {
         break;
       case 3:
         chords_gain.amplitude(value/100.0,100); chord_attack_velocity=value/100.0*127;
+        if (ringsEngine) ringsEngine->applyParameter(adress, value);
         break;
       case 120:
         for (int i=0;i<7;i++){
@@ -622,7 +624,7 @@ void apply_audio_parameter(int adress, int value) {
         chords_effect_mix.gain(1,value/100.0);
         break;
       case 184:
-        reverb_mixer.gain(1,value/100.0);chords_r_stereo_gain.amplitude(1.0-reverb_dry_proportion*value/100.0,100);chords_l_stereo_gain.amplitude((1.0-reverb_dry_proportion*value/100.0)*pan,100);
+        reverb_send_r.gain(0,value/100.0);reverb_mixer.gain(1,value/100.0);chords_r_stereo_gain.amplitude(1.0-reverb_dry_proportion*value/100.0,100);chords_l_stereo_gain.amplitude((1.0-reverb_dry_proportion*value/100.0)*pan,100);
         break;
       case 185:
         chord_waveshaper_mix.gain(0,1-value/100.0);chord_waveshaper_mix.gain(1,value/100.0);
@@ -710,6 +712,38 @@ void apply_audio_parameter(int adress, int value) {
         break;
       case 197:
         chords_amplifier.gain(value/100.0);
+        break;
+      case 240:
+        masterEffects.setDelayTime(value / 100.0f);
+        break;
+      case 241:
+        masterEffects.setDelayFeedbackMix(value / 100.0f);
+        break;
+      case 242:
+        masterEffects.setReverbAmount(value / 100.0f);
+        break;
+      case 236:
+      case 244:
+      case 245:
+      case 246:
+      case 247:
+      case 248:
+      case 249:
+      case 250:
+      case 251:
+      case 252:
+      case 253:
+      case 254:
+      case 255:
+      case 256:
+      case 257:
+      case 258:
+      case 259:
+      case 260:
+      case 261:
+      case 262:
+      case 263:
+        if (ringsEngine) ringsEngine->applyParameter(adress, value);
         break;
   }
 }

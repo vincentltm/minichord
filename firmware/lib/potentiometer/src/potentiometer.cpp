@@ -44,6 +44,12 @@ void potentiometer::force_update(){
     apply_audio_parameter(alternate_adress, output_value); //now apply the value that was saved for the alternate. That allows to memorize the settings of the user.
 }
 
+void potentiometer::sync(){
+    uint16_t current_reading = 1024 - analogRead(pot_pin);
+    this->potentiometer_smoothed_value = current_reading;
+    this->potentiometer_old_value = current_reading;
+}
+
 bool potentiometer::update_parameter(bool alternate_flag){
     uint16_t current_reading = 1024-analogRead(pot_pin);
     potentiometer_smoothed_value=(10*potentiometer_smoothed_value+current_reading)/11;

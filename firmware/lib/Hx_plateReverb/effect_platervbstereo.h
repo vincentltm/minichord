@@ -51,7 +51,7 @@
 
 // if uncommented will place all the buffers in the DMAMEM section ofd the memory
 // works with single instance of the reverb only
-#define REVERB_USE_DMAMEM
+//#define REVERB_USE_DMAMEM
 
 /***
  * Loop delay modulation: comment/uncomment to switch sin/cos 
@@ -116,6 +116,7 @@ public:
     bool get_bypass(void) {return bypass;}
     void set_bypass(bool state) {bypass = state;};
     void tgl_bypass(void) {bypass ^=1;}
+    void clear();
 private:
     bool bypass = false;
     audio_block_t *inputQueueArray[2];

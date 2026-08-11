@@ -149,6 +149,32 @@ AudioEffectPlateReverb::AudioEffectPlateReverb() : AudioStream(2, inputQueueArra
     lfo1_adder = (UINT32_MAX + 1)/(AUDIO_SAMPLE_RATE_EXACT * LFO1_FREQ_HZ);
     lfo2_phase_acc = 0;
     lfo2_adder = (UINT32_MAX + 1)/(AUDIO_SAMPLE_RATE_EXACT * LFO2_FREQ_HZ);  
+    clear();
+}
+
+void AudioEffectPlateReverb::clear() {
+    AudioNoInterrupts();
+    memset(in_allp1_bufL, 0, sizeof(in_allp1_bufL));
+    memset(in_allp2_bufL, 0, sizeof(in_allp2_bufL));
+    memset(in_allp3_bufL, 0, sizeof(in_allp3_bufL));
+    memset(in_allp4_bufL, 0, sizeof(in_allp4_bufL));
+    memset(in_allp1_bufR, 0, sizeof(in_allp1_bufR));
+    memset(in_allp2_bufR, 0, sizeof(in_allp2_bufR));
+    memset(in_allp3_bufR, 0, sizeof(in_allp3_bufR));
+    memset(in_allp4_bufR, 0, sizeof(in_allp4_bufR));
+    memset(lp_allp1_buf, 0, sizeof(lp_allp1_buf));
+    memset(lp_allp2_buf, 0, sizeof(lp_allp2_buf));
+    memset(lp_allp3_buf, 0, sizeof(lp_allp3_buf));
+    memset(lp_allp4_buf, 0, sizeof(lp_allp4_buf));
+    memset(lp_dly1_buf, 0, sizeof(lp_dly1_buf));
+    memset(lp_dly2_buf, 0, sizeof(lp_dly2_buf));
+    memset(lp_dly3_buf, 0, sizeof(lp_dly3_buf));
+    memset(lp_dly4_buf, 0, sizeof(lp_dly4_buf));
+    master_lowpass_l = 0.0f;
+    master_lowpass_r = 0.0f;
+    lpf1 = lpf2 = lpf3 = lpf4 = 0.0f;
+    hpf1 = hpf2 = hpf3 = hpf4 = 0.0f;
+    AudioInterrupts();
 }
 
 // #define sat16(n, rshift) signed_saturate_rshift((n), 16, (rshift))
