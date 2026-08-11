@@ -873,12 +873,19 @@ void setup() {
   pinMode(_MUTE_PIN, OUTPUT);
   digitalWrite(_MUTE_PIN, LOW);  // Hardware DAC mute active during startup
   Serial.begin(9600);
+  if (CrashReport) {
+    Serial.println("--- CRASH REPORT ---");
+    Serial.print(CrashReport);
+    Serial.println("--------------------");
+  }
 
-  // Clear static DMAMEM RAM2 delay & reverb buffers BEFORE starting AudioMemory interrupts
+  // Explicitly initialize engines & clear DMAMEM buffers BEFORE AudioMemory starts interrupts
+  plaitsEngine->init();
+  ringsEngine->init();
   masterEffects.init();
   pt2399_delay.clear();
 
-  AudioMemory(60);  // 60 audio blocks (15 KB) allocated safely from 140+ KB free heap
+  AudioMemory(60);  // Audio interrupts start safely AFTER engines are initialized & muted
   calculate_ws_array();
   chord_waveshape.shape(wave_shape, 257);
   string_waveshape.shape(wave_shape, 257);
@@ -959,11 +966,9 @@ void setup() {
       stereo_r_mixer.gain(3, 1.0f);
     }
   );
-  ringsEngine->init();
   patchCordRingsL = new AudioConnection(ringsEngine->getStream(), 0, stereo_l_mixer, 3);
   patchCordRingsR = new AudioConnection(ringsEngine->getStream(), 1, stereo_r_mixer, 3);
 
-  plaitsEngine->init();
   new AudioConnection(*plaitsEngine->getStream(), 0, stereo_l_mixer, 2);
   new AudioConnection(*plaitsEngine->getStream(), 1, stereo_r_mixer, 2);
 
