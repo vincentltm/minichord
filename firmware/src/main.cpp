@@ -878,7 +878,7 @@ void setup() {
   masterEffects.init();
   pt2399_delay.clear();
 
-  AudioMemory(450);  // Base audio blocks (PT2399 delay uses static DMAMEM memory)
+  AudioMemory(60);  // 60 audio blocks (15 KB) allocated safely from 140+ KB free heap
   calculate_ws_array();
   chord_waveshape.shape(wave_shape, 257);
   string_waveshape.shape(wave_shape, 257);

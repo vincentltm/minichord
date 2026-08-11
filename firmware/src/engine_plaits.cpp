@@ -60,7 +60,7 @@ EnginePlaits::EnginePlaits()
     memset(currentChord_, 0, sizeof(currentChord_));
 }
 
-static uint8_t plaitsBufferPool[4 * 2048];
+DMAMEM static uint8_t plaitsBufferPool[4 * 2048];
 
 void EnginePlaits::init() {
     for (size_t i = 0; i < MAX_PLAITS_VOICES; ++i) {
