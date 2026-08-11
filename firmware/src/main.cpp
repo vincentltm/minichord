@@ -1300,9 +1300,10 @@ void handle_preset_change() {
   // Banks 0-11: Stock subtractive presets (a-l)
   // Banks 12-15: Rings modes (Modal, Sympathetic, Inharmonic, FM)
   // Banks 16-31: Plaits sound models (VA, Waveshape, FM, Grain, Additive, Wavetable, Chord, Speech, Swarm, Noise, Particle, String, Modal, Kick, Snare, HiHat)
-  static const int TOTAL_BANKS = 32;
+  static const int NORMAL_BANKS = 16;
   static const int RINGS_START = 12;
   static const int PLAITS_START = 16;
+  static const int PLAITS_COUNT = 16;
   static const rings::ResonatorModel rings_models[] = {
     rings::RESONATOR_MODEL_MODAL,
     rings::RESONATOR_MODEL_SYMPATHETIC_STRING,
@@ -1312,18 +1313,39 @@ void handle_preset_change() {
   static const char* rings_names[] = {"Modal", "Sympathetic", "Inharmonic", "FM"};
 
   int prev_bank = current_bank_number;
+  bool up_pressed = (up_button.read_transition() > 1);
+  bool down_pressed = (down_button.read_transition() > 1);
 
-  if (up_button.read_transition() > 1) {
+  if (up_pressed || down_pressed) {
     if (!sysex_controler_connected && flag_save_needed && current_bank_number < RINGS_START) {
       save_config(current_bank_number, false);
     }
-    current_bank_number = (current_bank_number + 1) % TOTAL_BANKS;
-  }
-  if (down_button.read_transition() > 1) {
-    if (!sysex_controler_connected && flag_save_needed && current_bank_number < RINGS_START) {
-      save_config(current_bank_number, false);
+
+    if (shift_held) {
+      // SHIFT + UP/DOWN: Cycle exclusively through Plaits models (Banks 16-31)
+      int plaits_rel_idx = 0;
+      if (current_bank_number >= PLAITS_START) {
+        plaits_rel_idx = current_bank_number - PLAITS_START;
+      }
+      if (up_pressed) {
+        plaits_rel_idx = (plaits_rel_idx + 1) % PLAITS_COUNT;
+      } else {
+        plaits_rel_idx = (plaits_rel_idx - 1 + PLAITS_COUNT) % PLAITS_COUNT;
+      }
+      current_bank_number = PLAITS_START + plaits_rel_idx;
+    } else {
+      // NORMAL UP/DOWN: Cycle through Stock presets (0-11) and Rings models (12-15)
+      int normal_bank_idx = current_bank_number;
+      if (normal_bank_idx >= NORMAL_BANKS) {
+        normal_bank_idx = 0; // Transition back to Stock if coming from Plaits
+      }
+      if (up_pressed) {
+        normal_bank_idx = (normal_bank_idx + 1) % NORMAL_BANKS;
+      } else {
+        normal_bank_idx = (normal_bank_idx - 1 + NORMAL_BANKS) % NORMAL_BANKS;
+      }
+      current_bank_number = normal_bank_idx;
     }
-    current_bank_number = (current_bank_number - 1 + TOTAL_BANKS) % TOTAL_BANKS;
   }
 
   if (current_bank_number != prev_bank) {
