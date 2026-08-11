@@ -404,3 +404,41 @@ Once all those steps are done, use a thin pin (for example a hair pin) to push i
 If you carefully followed those steps, the Teensy Loader will indicate "Download Complete" then "Reboot OK". The main colour led of the PCB should light up. 
 
 After an update, it might be necessary to use [minicontrol](/minicontrol) to wipe all presets back for factory using the "reset all banks" option, as changes might render previous presets incompatible (or at least weird-sounding). 
+
+
+# **Resonator Engine & Advanced Features (`resonator` branch)**
+
+The `resonator` firmware introduces physical modeling sound synthesis based on Mutable Instruments **Rings**, as well as lo-fi analog-style delay, overdrive saturation, and generative arpeggiation.
+
+## Physical Modeling Engine Modes
+
+The harp section supports 5 distinct sound engine models, selectable via the Web MIDI controller ([minicontrol](#minicontrol)):
+
+1. **Stock Subtractive Engine**: The classic Minichord sound engine built with subtractive synthesis oscillator waveforms and envelopes.
+2. **Modal Resonator**: Simulates struck acoustic structures (metal bars, glass tubes, bells, membranes, and tuned plates).
+3. **Sympathetic Strings**: Simulates virtual harp and sitar sympathetic string resonances, where excitation triggers harmonically tuned virtual string arrays.
+4. **Inharmonic String**: Non-integer overtone physical modeling for metallic and string-drum hybrids.
+5. **FM Voice**: Frequency-modulation voice based on physical exciter feedback.
+
+## Resonator Sound Shaping Parameters
+
+When a physical modeling model is active, the following parameters control the physical properties of the virtual resonator:
+
+* **Structure**: Controls overtone spacing, harmonicity/inharmonicity, and internal string coupling.
+* **Brightness**: Controls excitation filter cutoff and high-frequency damping.
+* **Damping**: Controls decay duration, resonance sustain, and energy loss.
+* **Position**: Controls where along the virtual string or membrane the excitation strike occurs.
+* **Spatial Reverb Mix**: Controls the internal physical modeling spatial reverb depth.
+* **Polyphony**: Configures between 1 and 6 simultaneous physical modeling resonator voices.
+* **Stereo Width**: Blends polyphonic voice allocation across the stereo field to prevent hard left/right voice clipping.
+
+## Master FX Suite
+
+* **PT2399 Lo-Fi Tape Delay**: Emulates analog PT2399 delay IC dynamics, complete with vintage tape clock wobble, filtering, and warm repeat damping.
+* **Soft Overdrive / Saturation**: Provides non-linear soft-clipping saturation to smooth physical modeling transients and add subtle analog warmth.
+
+## Generative Euclidean / Markov Sequencer
+
+The harp touchstrip can trigger an automated **Euclidean Arpeggiator**, generating polyrhythmic and self-playing patterns based on mathematical Euclidean rhythm distributions and Markov note transitions.
+* **Tempo**: Adjustable from 40 to 240 BPM via Web MIDI (`Address 255`).
+

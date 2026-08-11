@@ -10,9 +10,33 @@ This folder contains a PlatformIO project for Teensy 4.0.
 
 In particular the it contains :
 
-- the `src`folder containing the `main.cpp` file, as well as the file defining the USB name of the device, `name.c`
-- the `lib` folder containing the librairies for the chips used, the debouncing and the potentiometer logic 
-- the `include` folder containing all the Teensy audio architecture definition, as well as the hardware definitions and the `sysex_handler.h`file. 
+- the `src`folder containing `main.cpp`, engine implementations (`engine_rings.cpp`, `generative_sequencer.cpp`, `effect_pt2399_delay.cpp`), and USB device name definition (`name.c`).
+- the `lib` folder containing chip drivers, debouncing, potentiometer logic, plate reverb (`Hx_plateReverb`), and Mutable Instruments Rings DSP vendor port (`rings_vendor`).
+- the `include` folder containing audio architecture (`audio_definition.h`), modular engine interfaces (`engine_interface.h`, `engine_manager.h`, `engine_rings.h`, `engine_stock.h`), master effects (`master_effects.h`, `overdrive.h`, `effect_pt2399_delay.h`), and `sysex_handler.h`.
+
+### Architecture (`resonator` branch)
+
+1. **Modular Synth Engine Interface (`SynthEngine`)**:
+   - Allows runtime switching of synthesis engines (`StockSubtractiveEngine` vs `RingsEngine`).
+   - `RingsEngine` integrates the Mutable Instruments Rings physical modeling algorithms running directly on the Teensy 4.0 ARM Cortex-M7 floating point unit.
+
+2. **Master FX & Processing Pipeline**:
+   - **PT2399 Delay**: Emulates analog bucket-brigade / PT2399 tape delay dynamics with clock jitter and repeat filtering.
+   - **Soft Overdrive**: Non-linear saturation module for analog warmth.
+   - **Stereo Width & Reverb**: Smooth cross-blended stereo voice panning and plate reverb.
+
+3. **SysEx Parameter Addresses (Extended)**:
+   - `246`: Harp Engine Select (`0`: Stock, `1`: Modal Resonator, `2`: Sympathetic Strings, `3`: Inharmonic String, `4`: FM)
+   - `247`: Resonator Structure (0–1000)
+   - `248`: Resonator Brightness (0–1000)
+   - `249`: Resonator Damping (0–1000)
+   - `250`: Resonator Position (0–1000)
+   - `251`: Resonator Reverb Mix (0–1000)
+   - `252`: Resonator Polyphony (1–6)
+   - `253`: Stereo Width (0–1000)
+   - `254`: Arpeggiator Enable (`0` / `1`)
+   - `255`: Arpeggiator Tempo (40–240 BPM)
+
 
 The next interesting folder is related to the "generator". To be able to simply modify parameters related to sound synthesis and have a coherent firmware and control software, those parameters are defined in a [parameters.json file](https://github.com/BenjaminPoilve/MiniChord/blob/main/firmware/generator/parameters.json). By using the generation script, both the interface and necessary firmware file are generated. Note that the interface will be included in the minichord website by using the `build_site.sh` script in the documentation folder. 
 

@@ -33,14 +33,22 @@ In particular it contains:
 
 ## Firmware 
 
-The firmware folder contains the project firmware and necessary programming ressources.
+The firmware folder contains the project firmware and necessary programming resources.
 
 All software is provided under a 3-clause BSD License.
+
+### Features in the `resonator` Branch
+* **Physical Modeling Synthesis**: Integrated Mutable Instruments **Rings** resonator DSP engine (Modal, Sympathetic String, Inharmonic, and FM modes).
+* **Modular SynthEngine Architecture**: Dynamic runtime switching between stock subtractive engine and physical modeling resonator.
+* **Master Effects Suite**: Custom **PT2399 Lo-Fi Tape Delay**, soft overdrive/saturation, and stereo width cross-fading.
+* **Generative Euclidean / Markov Sequencer**: Onboard rhythm and melody generator.
+* **Expanded Web MIDI Control**: Web-based parameter tweaking via [minicontrol](https://github.com/BenjaminPoilve/MiniChord/tree/main/firmware/minicontrol).
 
 In particular it contains: 
 - the [Hex firmware](https://github.com/BenjaminPoilve/MiniChord/blob/main/firmware/firmware.hex)
 - the full [PlatformIO project](https://github.com/BenjaminPoilve/MiniChord/tree/main/firmware)
 - the [minicontrol software](https://github.com/BenjaminPoilve/MiniChord/tree/main/firmware/minicontrol)
+
 
 
 ## Alternative control platforms
