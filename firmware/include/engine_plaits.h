@@ -80,7 +80,7 @@ public:
 
     const char* presetFilename(uint8_t bankIndex) override;
     const char* name() const override { return "Plaits Engine"; }
-    float ledHue() const override { return 180.0f; } // Cyan/Turquoise LED color
+    float ledHue() const override;
 
 private:
     static const size_t MAX_PLAITS_VOICES = 4;

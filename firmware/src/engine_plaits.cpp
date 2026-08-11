@@ -319,3 +319,34 @@ const char* EnginePlaits::presetFilename(uint8_t bankIndex) {
     snprintf(fn, sizeof(fn), "plaits_bank_%d.dat", bankIndex);
     return fn;
 }
+
+float EnginePlaits::ledHue() const {
+    static const float plaits_model_hues[] = {
+        30.0f,  // 0: VA (Amber / Orange)
+        0.0f,   // 1: Waveshape (Crimson Red)
+        180.0f, // 2: 2-Op FM (Electric Cyan)
+        280.0f, // 3: Grain (Neon Purple)
+        55.0f,  // 4: Additive (Golden Yellow)
+        210.0f, // 5: Wavetable (Deep Sky Blue)
+        120.0f, // 6: Chord (Bright Green)
+        320.0f, // 7: Speech (Hot Magenta / Pink)
+        15.0f,  // 8: Swarm (Fiery Red-Orange)
+        195.0f, // 9: Noise (Ice Blue)
+        160.0f, // 10: Particle (Emerald Teal)
+        40.0f,  // 11: String (Warm Copper)
+        260.0f, // 12: Modal (Rich Indigo)
+        350.0f, // 13: Kick (Deep Ruby Red)
+        90.0f,  // 14: Snare (Lime Green)
+        175.0f, // 15: HiHat (Silver Cyan)
+        35.0f,  // 16: VA VCF
+        50.0f,  // 17: Phase Distortion
+        185.0f, // 18: Six-Op FM
+        205.0f, // 19: Wave Terrain
+        270.0f, // 20: String Machine
+        100.0f  // 21: Chiptune
+    };
+    if (currentModel_ >= 0 && currentModel_ < static_cast<int>(sizeof(plaits_model_hues) / sizeof(plaits_model_hues[0]))) {
+        return plaits_model_hues[currentModel_];
+    }
+    return 180.0f;
+}

@@ -27,6 +27,8 @@ EngineStock stockEngine;
 DMAMEM static uint8_t shared_engine_memory[sizeof(EngineRings) > sizeof(EnginePlaits) ? sizeof(EngineRings) : sizeof(EnginePlaits)] __attribute__((aligned(4)));
 EngineRings* ringsEngine = nullptr;
 EnginePlaits* plaitsEngine = nullptr;
+static const int RINGS_START = 12;
+static const int PLAITS_START = 16;
 AudioConnection* patchCordRingsL = nullptr;
 AudioConnection* patchCordRingsR = nullptr;
 bool shift_held = false;
@@ -1355,8 +1357,8 @@ void handle_preset_change() {
       modeManager.setModeIndex(5 + plaits_idx);  // Modes 5-20 are Plaits
       Serial.print("> Mode: ");
       Serial.println(modeManager.currentModeName());
-      // Distinct LED color hue gradient for Plaits models (Cyan to Blue, 170-250)
-      float hue = 170.0f + (plaits_idx * 5.0f);
+      // Distinct LED color hue per Plaits model
+      float hue = plaitsEngine->ledHue();
       set_led_color(hue, 1.0f, 1.0f - led_attenuation);
     } else if (current_bank_number >= RINGS_START) {
       // Rings engine mode (Banks 12-15)
@@ -1384,11 +1386,21 @@ void handle_low_battery() {
     led_blinking_flag = true;
   } else if (LBO_transition == 2) {
     led_blinking_flag = false;
-    set_led_color(bank_led_hue, 1.0, 1 - led_attenuation);
+    float hue = (current_bank_number >= PLAITS_START) ? plaitsEngine->ledHue() : bank_led_hue;
+    set_led_color(hue, 1.0, 1 - led_attenuation);
   }
   if (led_blinking_flag) {
     set_led_color(bank_led_hue, 1.0, 0.6 + 0.4 * sin(color_led_blink_val));
     color_led_blink_val += 0.005;
+  } else if (current_bank_number >= PLAITS_START) {
+    // Gentle breathing pulse animation for Plaits mode (0.65 to 1.0 brightness)
+    static float plaits_led_phase = 0.0f;
+    plaits_led_phase += 0.003f;
+    if (plaits_led_phase >= 6.28318f) plaits_led_phase -= 6.28318f;
+    
+    float pulse = 0.80f + 0.20f * sinf(plaits_led_phase);
+    float hue = plaitsEngine->ledHue();
+    set_led_color(hue, 1.0f, (1.0f - led_attenuation) * pulse);
   }
 }
 
